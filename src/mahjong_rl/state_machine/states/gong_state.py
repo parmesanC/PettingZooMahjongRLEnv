@@ -284,11 +284,21 @@ class GongState(GameState):
         Args:
             context: 游戏上下文
             player: 玩家数据
-            tile: 杠牌
+            tile: 杠牌（对于KONG_SKIN使用，对于KONG_RED和KONG_LAZY会被忽略）
             kong_type: 'RED', 'SKIN', or 'LAZY'
         """
+        # 确定要移除的牌ID
+        if kong_type == 'RED':
+            actual_tile = context.red_dragon
+        elif kong_type == 'LAZY':
+            actual_tile = context.lazy_tile
+        elif kong_type == 'SKIN':
+            actual_tile = tile  # 皮子杠使用传入的tile（因为有两张皮子）
+        else:
+            raise ValueError(f"Unknown kong_type: {kong_type}")
+
         # 从手牌移除牌
-        player.hand_tiles.remove(tile)
+        player.hand_tiles.remove(actual_tile)
 
         # 更新special_gang计数
         if kong_type == 'RED':
@@ -304,8 +314,8 @@ class GongState(GameState):
         )
         context.action_history.append(
             ActionRecord(
-                action_type=MahjongAction(action_type_enum, tile),
-                tile=tile,
+                action_type=MahjongAction(action_type_enum, actual_tile),
+                tile=actual_tile,
                 player_id=player.player_id
             )
         )

@@ -39,30 +39,32 @@ class SimpleCLIRenderer:
         self._render_discard_pool(context)
         print()
     
-    def render_action_help(self, action_mask: Dict):
+    def render_action_help(self, action_mask):
         """渲染动作帮助（包含牌ID对照表）"""
         print("\n" + "=" * 60)
         print("可用动作 (请输入元组形式):")
         print("=" * 60)
-        
-        types = action_mask['types']
-        
-        for i, (is_valid, desc) in enumerate([
-            (types[0], "(0, 牌ID)    打牌 - 输入要打出的牌ID"),
-            (types[1], "(1, 0/1/2)   吃牌 - 0=左吃, 1=中吃, 2=右吃"),
-            (types[2], "(2, -1)       碰牌"),
-            (types[3], "(3, -1)       明杠"),
-            (types[4], "(4, 牌ID)     补杠 - 输入要补杠的牌ID"),
-            (types[5], "(5, 牌ID)     暗杠 - 输入要暗杠的牌ID"),
-            (types[6], "(6, 牌ID)     红中杠 - 输入红中的牌ID"),
-            (types[7], "(7, 牌ID)     皮子杠 - 输入皮子的牌ID"),
-            (types[8], "(8, 牌ID)     赖子杠 - 输入赖子的牌ID"),
-            (types[9], "(9, -1)       胡牌"),
-            (types[10], "(10, -1)     过牌"),
-        ]):
-            if is_valid:
+
+        # 新的145位action_mask直接访问
+        action_ranges = {
+            0: (0, 33, "(0, 牌ID)    打牌 - 输入要打出的牌ID"),
+            1: (34, 36, "(1, 0/1/2)   吃牌 - 0=左吃, 1=中吃, 2=右吃"),
+            2: (37, 37, "(2, 0)       碰牌"),
+            3: (38, 38, "(3, 0)       明杠"),
+            4: (39, 72, "(4, 牌ID)    补杠 - 输入要补杠的牌ID"),
+            5: (73, 106, "(5, 牌ID)    暗杠 - 输入要暗杠的牌ID"),
+            6: (107, 107, "(6, 0)       红中杠"),
+            7: (108, 141, "(7, 牌ID)    皮子杠 - 输入皮子的牌ID"),
+            8: (142, 142, "(8, 0)       赖子杠"),
+            9: (143, 143, "(9, -1)      胡牌"),
+            10: (144, 144, "(10, -1)     过牌"),
+        }
+
+        for action_type, (start, end, desc) in action_ranges.items():
+            # 检查该动作类型的位是否有任何一个为1
+            if any(action_mask[start:end+1]):
                 print(f"  {desc}")
-        
+
         print("\n" + "-" * 60)
         print("牌ID对照表:")
         print("-" * 60)

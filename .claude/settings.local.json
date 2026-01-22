@@ -1,8 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "WebSearch",
-      "mcp__web-reader__webReader",
       "Bash(python:*)",
       "Skill(superpowers:finishing-a-development-branch)",
       "Bash(git -C \"D:\\\\DATA\\\\Python_Project\\\\Code\\\\PettingZooRLENVMahjong\" status)",
@@ -13,7 +11,12 @@
       "Bash(C:\\\\Users\\\\Zewei Li\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps\\\\python.exe:*)",
       "Bash(cmd:*)",
       "Bash(powershell:*)",
-      "Bash(/c/Users/Zewei Li/AppData/Local/Microsoft/WindowsApps/python quick_test.py)"
+      "Bash(/c/Users/Zewei Li/AppData/Local/Microsoft/WindowsApps/python quick_test.py)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Skill(superpowers:subagent-driven-development)",
+      "Bash(pytest:*)",
+      "Bash(git show:*)"
     ]
   }
 }

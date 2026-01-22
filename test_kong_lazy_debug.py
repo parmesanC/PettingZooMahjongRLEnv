@@ -63,10 +63,10 @@ def test_kong_lazy_error():
                 print(f"action_mask 形状: {action_mask.shape}")
                 print(f"action_mask 非零位置: {[(i, int(action_mask[i])) for i in range(len(action_mask)) if action_mask[i] > 0]}")
 
-                # 检查特殊杠位
-                print(f"  KONG_LAZY 位 (174-207): {action_mask[174:208]}")
-                print(f"  KONG_RED 位 (140+31=171): {action_mask[171]}")
-                print(f"  KONG_SKIN 位 (208-241): {action_mask[208:242]}")
+                # 检查特殊杠位（145位action_mask）
+                print(f"  KONG_RED 位 (107): {action_mask[107]}")
+                print(f"  KONG_LAZY 位 (108): {action_mask[108]}")
+                print(f"  KONG_SKIN 位 (109-142): {action_mask[109:143]}")
 
             # 如果游戏结束，退出
             if terminated or truncated:

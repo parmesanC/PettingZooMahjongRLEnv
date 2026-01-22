@@ -31,6 +31,10 @@ class ActionValidator:
         :return: 可执行的动作类型列表
         """
 
+        # 0. 牌墙为空时，不允许吃碰杠胡（直接流局）
+        if len(self.context.wall) == 0:
+            return []
+
         # 1. 排除自身弃牌（不能对自己的弃牌执行吃碰杠）
         if current_player.player_id == discard_player_idx:
             return []
@@ -171,10 +175,10 @@ class ActionValidator:
                     available_actions.append(MahjongAction(ActionType.DISCARD, card))
                 else:
                     if card == self.context.lazy_tile:
-                        available_actions.append(MahjongAction(ActionType.KONG_LAZY, card))
+                        available_actions.append(MahjongAction(ActionType.KONG_LAZY, 0))
                     elif card == self.context.red_dragon:
-                        available_actions.append(MahjongAction(ActionType.KONG_RED, card))
-                    else:
+                        available_actions.append(MahjongAction(ActionType.KONG_RED, 0))
+                    elif card in self.context.skin_tile:
                         available_actions.append(MahjongAction(ActionType.KONG_SKIN, card))
             if count > 3:
                 available_actions.append(MahjongAction(ActionType.KONG_CONCEALED, card))
@@ -204,9 +208,7 @@ class ActionValidator:
             winer_score = max(score_list)
             # 如果和所有玩家番数都达到和牌标准，起胡番：16
             if all(abs(score) + winer_score >= 16 for score in score_list):
-                # WIN 动作的参数使用 draw_tile（如果为 None 则用 0）
-                win_param = draw_tile if draw_tile is not None else 0
-                available_actions.append(MahjongAction(ActionType.WIN, win_param))
+                available_actions.append(MahjongAction(ActionType.WIN, -1))
             return available_actions
 
         return available_actions

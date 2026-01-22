@@ -32,7 +32,7 @@ class WebRenderer:
 
         # 渲染动作区域
         if action_mask:
-            action_html = self._render_action_buttons(action_mask)
+            action_html = self._render_action_buttons(action_mask, context)
         else:
             action_html = self._render_action_panel()
 
@@ -476,37 +476,81 @@ class WebRenderer:
         html += '</div>'
         return html
     
-    def _render_action_buttons(self, action_mask: Dict) -> str:
-        """渲染动作按钮（直接嵌入到HTML中）"""
-        types = action_mask['types']
-        params = action_mask['params']
-
+    def _render_action_buttons(self, action_mask, context):
+        """渲染动作按钮（基于新的145位action_mask）"""
         html = '<div class="action-prompt"><h3>请选择动作</h3><div class="action-buttons">'
 
-        # 打牌动作 (action_type = 0)
-        if types[0]:
-            valid_tiles = [i for i in range(34) if params[i]]
+        # 打牌动作 (action_type = 0, 索引0-33)
+        if any(action_mask[0:34]):
+            valid_tiles = [i for i in range(34) if action_mask[i]]
             html += f'<div class="action-group"><h4>打牌</h4>'
             for tile_id in valid_tiles:
                 tile_name = self.visualizer.format_tile(Tiles(tile_id))
                 html += f'<button class="action-btn tile-btn" data-action-type="0" data-parameter="{tile_id}">{tile_name}</button>'
             html += '</div>'
 
-        # 其他动作
-        for i, (is_valid, action_name, needs_param) in enumerate([
-            (types[1], "吃牌", True),
-            (types[2], "碰牌", False),
-            (types[3], "明杠", False),
-            (types[4], "补杠", True),
-            (types[5], "暗杠", True),
-            (types[6], "红中杠", False),
-            (types[7], "皮子杠", False),
-            (types[8], "赖子杠", False),
-            (types[9], "胡牌", False),
-            (types[10], "过牌", False),
-        ]):
-            if is_valid:
-                html += f'<button class="action-btn" data-action-type="{i}" data-parameter="-1">{action_name}</button>'
+        # 吃牌 (action_type = 1, 索引34-36)
+        if any(action_mask[34:37]):
+            html += '<div class="action-group"><h4>吃牌</h4>'
+            for i, direction in enumerate(["左吃", "中吃", "右吃"]):
+                if action_mask[34 + i]:
+                    html += f'<button class="action-btn" data-action-type="1" data-parameter="{i}">{direction}</button>'
+            html += '</div>'
+
+        # 碰牌 (action_type = 2, 索引37)
+        if action_mask[37]:
+            discard_tile = context.last_discarded_tile if hasattr(context, 'last_discarded_tile') else 0
+            tile_name = self.visualizer.format_tile(Tiles(discard_tile)) if discard_tile >= 0 else "碰牌"
+            html += f'<button class="action-btn" data-action-type="2" data-parameter="0">{tile_name}</button>'
+
+        # 明杠 (action_type = 3, 索引38, 1位)
+        if action_mask[38]:
+            discard_tile = context.last_discarded_tile if hasattr(context, 'last_discarded_tile') else 0
+            tile_name = self.visualizer.format_tile(Tiles(discard_tile)) if discard_tile >= 0 else "明杠"
+            html += f'<button class="action-btn" data-action-type="3" data-parameter="0">{tile_name}</button>'
+
+        # 补杠 (action_type = 4, 索引39-72)
+        if any(action_mask[39:73]):
+            valid_tiles = [i - 39 for i in range(39, 73) if action_mask[i]]
+            html += f'<div class="action-group"><h4>补杠</h4>'
+            for tile_id in valid_tiles:
+                tile_name = self.visualizer.format_tile(Tiles(tile_id))
+                html += f'<button class="action-btn tile-btn" data-action-type="4" data-parameter="{tile_id}">{tile_name}</button>'
+            html += '</div>'
+
+        # 暗杠 (action_type = 5, 索引73-106)
+        if any(action_mask[73:107]):
+            valid_tiles = [i - 73 for i in range(73, 107) if action_mask[i]]
+            html += f'<div class="action-group"><h4>暗杠</h4>'
+            for tile_id in valid_tiles:
+                tile_name = self.visualizer.format_tile(Tiles(tile_id))
+                html += f'<button class="action-btn tile-btn" data-action-type="5" data-parameter="{tile_id}">{tile_name}</button>'
+            html += '</div>'
+
+        # 红中杠 (action_type = 6, 索引107, 1位)
+        if action_mask[107]:
+            html += '<button class="action-btn" data-action-type="6" data-parameter="0">红中杠</button>'
+
+        # 皮子杠 (action_type = 7, 索引108-141, 34位)
+        if any(action_mask[108:142]):
+            valid_tiles = [i - 108 for i in range(108, 142) if action_mask[i]]
+            html += f'<div class="action-group"><h4>皮子杠</h4>'
+            for tile_id in valid_tiles:
+                tile_name = self.visualizer.format_tile(Tiles(tile_id))
+                html += f'<button class="action-btn tile-btn" data-action-type="7" data-parameter="{tile_id}">{tile_name}</button>'
+            html += '</div>'
+
+        # 赖子杠 (action_type = 8, 索引142, 1位)
+        if action_mask[142]:
+            html += '<button class="action-btn" data-action-type="8" data-parameter="0">赖子杠</button>'
+
+        # 胡牌 (action_type = 9, 索引143)
+        if action_mask[143]:
+            html += '<button class="action-btn" data-action-type="9" data-parameter="-1">胡牌</button>'
+
+        # 过牌 (action_type = 10, 索引144)
+        if action_mask[144]:
+            html += '<button class="action-btn" data-action-type="10" data-parameter="-1">过牌</button>'
 
         html += '</div></div>'
         return html

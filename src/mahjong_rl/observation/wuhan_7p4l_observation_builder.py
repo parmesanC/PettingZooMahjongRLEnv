@@ -8,19 +8,19 @@ from src.mahjong_rl.core.constants import ActionType, GameStateType
 from src.mahjong_rl.rules.wuhan_mahjong_rule_engine.action_validator import ActionValidator
 
 
-# action_mask 索引范围定义
+# action_mask 索引范围定义（总长度：145位）
 ACTION_MASK_RANGES = {
-    'DISCARD': (0, 34),          # 0-33: 可打出的牌
+    'DISCARD': (0, 34),          # 0-33: 可打出的牌（不包含特殊牌）
     'CHOW': (34, 37),            # 34-36: 左吃/中吃/右吃
     'PONG': (37, 38),            # 37: 是否可碰
-    'KONG_EXPOSED': (38, 72),    # 38-71: 可明杠的牌
-    'KONG_SUPPLEMENT': (72, 106), # 72-105: 可补杠的牌
-    'KONG_CONCEALED': (106, 140), # 106-139: 可暗杠的牌
-    'KONG_RED': (140, 174),      # 140-173: 红中杠（仅红中位置）
-    'KONG_LAZY': (174, 208),     # 174-207: 赖子杠（仅赖子位置）
-    'KONG_SKIN': (208, 242),     # 208-241: 皮子杠（34位，只标记手牌中存在的皮子）
-    'WIN': (242, 243),           # 242: 是否可胡
-    'PASS': (243, 244),          # 243: 是否可过
+    'KONG_EXPOSED': (38, 39),    # 38: 是否可明杠（1位）
+    'KONG_SUPPLEMENT': (39, 73),  # 39-72: 可补杠的牌
+    'KONG_CONCEALED': (73, 107),  # 73-106: 可暗杠的牌
+    'KONG_RED': (107, 108),      # 107: 是否可红中杠（1位，ActionType.KONG_RED=6）
+    'KONG_SKIN': (108, 142),     # 108-141: 皮子杠（34位，ActionType.KONG_SKIN=7）
+    'KONG_LAZY': (142, 143),     # 142: 赖子杠（1位，ActionType.KONG_LAZY=8）
+    'WIN': (143, 144),           # 143: 是否可胡
+    'PASS': (144, 145),          # 144: 是否可过
 }
 
 STATE_TO_PHASE = {
@@ -75,12 +75,12 @@ class Wuhan7P4LObservationBuilder(IObservationBuilder):
 
     def build_action_mask(self, player_id: int, context: GameContext) -> np.ndarray:
         """
-        构建动作掩码 - 返回扁平化的244位二进制数组
+        构建动作掩码 - 返回扁平化的145位二进制数组
 
         Returns:
-            np.ndarray: 形状为 (244,) 的二进制数组
+            np.ndarray: 形状为 (145,) 的二进制数组
         """
-        mask = np.zeros(244, dtype=np.int8)
+        mask = np.zeros(145, dtype=np.int8)
 
         current_state = context.current_state
         player = context.players[player_id]
@@ -124,9 +124,11 @@ class Wuhan7P4LObservationBuilder(IObservationBuilder):
 
             if action_type == ActionType.DISCARD.value:
                 # DISCARD: 标记手牌中所有可打出的牌 (索引 0-33)
+                # 但不包含特殊牌（赖子、皮子、红中），特殊牌只能通过杠动作处理
                 hand_counts = self._get_hand_counts(player.hand_tiles)
+                special_tiles = [context.lazy_tile, context.red_dragon] + context.skin_tile
                 for tile_id in range(34):
-                    if hand_counts[tile_id] > 0:
+                    if tile_id not in special_tiles and hand_counts[tile_id] > 0:
                         mask[tile_id] = 1
 
             elif action_type == ActionType.CHOW.value:
@@ -138,36 +140,36 @@ class Wuhan7P4LObservationBuilder(IObservationBuilder):
                 mask[37] = 1  # PONG 位
 
             elif action_type == ActionType.KONG_EXPOSED.value:
-                mask[38 + action.parameter] = 1
+                mask[38] = 1  # KONG_EXPOSED 位（1位）
 
             elif action_type == ActionType.KONG_SUPPLEMENT.value:
-                mask[72 + action.parameter] = 1
+                mask[39 + action.parameter] = 1
 
             elif action_type == ActionType.KONG_CONCEALED.value:
-                mask[106 + action.parameter] = 1
+                mask[73 + action.parameter] = 1
 
             elif action_type == ActionType.KONG_RED.value:
-                # 红中杠：固定在红中位置 (31)
-                mask[140 + 31] = 1
-
-            elif action_type == ActionType.KONG_LAZY.value:
-                # 赖子杠：赖子位置
-                lazy_tile = context.lazy_tile
-                if lazy_tile is not None:
-                    mask[174 + lazy_tile] = 1
+                # 红中杠：1位（全场只有一张红中）
+                mask[107] = 1
 
             elif action_type == ActionType.KONG_SKIN.value:
-                # 皮子杠：只标记 ActionValidator 检测到的实际可用的皮子杠动作
-                # action.parameter 就是手牌中实际存在的皮子牌ID
-                mask[208 + action.parameter] = 1
+                # 皮子杠：34位（两张皮子是独立的）
+                mask[108 + action.parameter] = 1
+
+            elif action_type == ActionType.KONG_LAZY.value:
+                # 赖子杠：1位（全场只有一张赖子）
+                lazy_tile = context.lazy_tile
+                if lazy_tile is not None:
+                    mask[142] = 1
 
             elif action_type == ActionType.WIN.value:
-                mask[242] = 1  # WIN 位
+                mask[143] = 1  # WIN 位
 
-        # 确保 DISCARD 可用（后备逻辑）
+        # 确保 DISCARD 可用（后备逻辑，同样需要排除特殊牌）
         if not np.any(mask[:34] > 0):
+            special_tiles = [context.lazy_tile, context.red_dragon] + context.skin_tile
             for tile in player.hand_tiles:
-                if 0 <= tile < 34:
+                if 0 <= tile < 34 and tile not in special_tiles:
                     mask[tile] = 1
 
         return mask
@@ -189,38 +191,40 @@ class Wuhan7P4LObservationBuilder(IObservationBuilder):
 
             # 处理杠动作（所有杠都允许）
             if action_type == ActionType.KONG_SUPPLEMENT.value:
-                mask[72 + action.parameter] = 1
+                mask[39 + action.parameter] = 1
 
             elif action_type == ActionType.KONG_CONCEALED.value:
-                mask[106 + action.parameter] = 1
+                mask[73 + action.parameter] = 1
 
             elif action_type == ActionType.KONG_RED.value:
-                # 红中杠：固定在红中位置 (31)
-                mask[140 + 31] = 1
-
-            elif action_type == ActionType.KONG_LAZY.value:
-                # 赖子杠：赖子位置
-                lazy_tile = context.lazy_tile
-                if lazy_tile is not None:
-                    mask[174 + lazy_tile] = 1
+                # 红中杠：1位（全场只有一张红中）
+                mask[107] = 1
 
             elif action_type == ActionType.KONG_SKIN.value:
-                # 皮子杠：只标记 ActionValidator 检测到的实际可用的皮子杠动作
-                mask[208 + action.parameter] = 1
+                # 皮子杠：34位（两张皮子是独立的）
+                mask[108 + action.parameter] = 1
 
-            # 处理 DISCARD
+            elif action_type == ActionType.KONG_LAZY.value:
+                # 赖子杠：1位（全场只有一张赖子）
+                lazy_tile = context.lazy_tile
+                if lazy_tile is not None:
+                    mask[142] = 1
+
+            # 处理 DISCARD（同样需要排除特殊牌）
             elif action_type == ActionType.DISCARD.value:
                 hand_counts = self._get_hand_counts(player.hand_tiles)
+                special_tiles = [context.lazy_tile, context.red_dragon] + context.skin_tile
                 for tile_id in range(34):
-                    if hand_counts[tile_id] > 0:
+                    if tile_id not in special_tiles and hand_counts[tile_id] > 0:
                         mask[tile_id] = 1
 
             # 忽略 WIN、CHOW、PONG、KONG_EXPOSED 动作（鸣牌后不允许）
 
-        # 确保 DISCARD 可用（后备逻辑）
+        # 确保 DISCARD 可用（后备逻辑，同样需要排除特殊牌）
         if not np.any(mask[:34] > 0):
+            special_tiles = [context.lazy_tile, context.red_dragon] + context.skin_tile
             for tile in player.hand_tiles:
-                if 0 <= tile < 34:
+                if 0 <= tile < 34 and tile not in special_tiles:
                     mask[tile] = 1
 
         return mask
@@ -245,13 +249,13 @@ class Wuhan7P4LObservationBuilder(IObservationBuilder):
                     mask[37] = 1
 
                 elif action_type == ActionType.KONG_EXPOSED.value:
-                    mask[38 + action.parameter] = 1
+                    mask[38] = 1  # KONG_EXPOSED 位（1位，因为明杠哪张牌是确定的）
 
                 elif action_type == ActionType.WIN.value:
-                    mask[242] = 1
+                    mask[143] = 1  # WIN 位
 
             # PASS 在响应状态总是可用
-            mask[243] = 1
+            mask[144] = 1  # PASS 位
 
         return mask
 

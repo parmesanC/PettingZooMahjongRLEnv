@@ -34,7 +34,7 @@ def main():
         print("2. example_mahjong_env.py 文件存在")
         sys.exit(1)
     
-    env = WuhanMahjongEnv(render_mode=None, training_phase=3, enable_logging=False, human_player_idx=args.human_player)
+    env = WuhanMahjongEnv(render_mode=None, training_phase=3, enable_logging=False)
     
     if args.mode == 'human_vs_ai':
         strategies = [

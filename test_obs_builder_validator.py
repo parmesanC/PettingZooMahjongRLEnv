@@ -46,16 +46,9 @@ def test_observation_builder_action_validator():
     print(f"\naction_mask 形状: {action_mask.shape}")
     print(f"action_mask 非零位置: {[(i, int(action_mask[i])) for i in range(len(action_mask)) if action_mask[i] > 0]}")
 
-    # 检查赖子杠位
-    lazy_kong_start = 174
-    lazy_kong_end = 208
-    lazy_kong_mask = action_mask[lazy_kong_start:lazy_kong_end]
-    print(f"\nKONG_LAZY 位 ({lazy_kong_start}-{lazy_kong_end-1}): {lazy_kong_mask}")
-
-    # 检查赖子位置
-    if context.lazy_tile is not None:
-        lazy_kong_pos = lazy_kong_start + context.lazy_tile
-        print(f"赖子杠位置 ({lazy_kong_pos}): {action_mask[lazy_kong_pos]}")
+    # 检查赖子杠位（145位action_mask，KONG_LAZY在索引108）
+    lazy_kong_pos = 108
+    print(f"\nKONG_LAZY 位 ({lazy_kong_pos}): {action_mask[lazy_kong_pos]}")
 
     if action_mask[lazy_kong_pos] > 0:
         print(f"✓ 检测到赖子杠可用")
@@ -117,9 +110,9 @@ def test_observation_builder_with_meld_decision():
 
     print(f"\naction_mask 形状: {action_mask.shape}")
 
-    # 检查赖子杠位
+    # 检查赖子杠位（145位action_mask，KONG_LAZY在索引108）
     if context.lazy_tile is not None:
-        lazy_kong_pos = 174 + context.lazy_tile
+        lazy_kong_pos = 108
         print(f"赖子杠位置 ({lazy_kong_pos}): {action_mask[lazy_kong_pos]}")
 
     if action_mask[lazy_kong_pos] > 0:

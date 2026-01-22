@@ -139,7 +139,7 @@ class WuhanMahjongEnv(AECEnv):
                 'remaining_tiles': spaces.Discrete(137),
                 'dealer': spaces.MultiDiscrete([4]),
                 'current_phase': spaces.Discrete(8),
-                'action_mask': spaces.MultiBinary(244),  # 扁平化动作掩码
+                'action_mask': spaces.MultiBinary(145),  # 扁平化动作掩码（145位）
             })
         
         return observation_spaces

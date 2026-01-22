@@ -4,8 +4,10 @@
 
 用于验证游戏逻辑是否正确运行，无需人工干预。
 """
-
+import random
 import sys
+import time
+
 sys.path.insert(0, '.')
 
 from example_mahjong_env import WuhanMahjongEnv
@@ -29,9 +31,12 @@ def test_four_ai_game():
     strategies = [RandomStrategy() for _ in range(4)]
 
     # 重置环境
-    env.reset(seed=42)
+    now_time = time.time()
+    _seed = int(now_time) + random.randint(0, 1000000)
+    env.reset(seed=_seed)
     print(f"\n游戏开始！初始agent: {env.agent_selection}")
     print(f"初始状态: {env.state_machine.current_state_type.name}")
+    print(f"当前种子: {_seed}")
 
     step_count = 0
     max_steps = 1000  # 防止无限循环
@@ -65,8 +70,8 @@ def test_four_ai_game():
                 action = strategy.choose_action(obs, action_mask)
 
                 # 打印动作（调试用）
-                if step_count <= 20:  # 只打印前20步
-                    print(f"  {agent} 动作: {action}")
+                # if step_count <= 20:  # 只打印前20步
+                print(f"  {agent} 动作: {action}")
 
             # 执行动作
             obs, reward, terminated, truncated, info = env.step(action)
@@ -142,7 +147,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description='测试四个AI玩家对战')
-    parser.add_argument('--games', type=int, default=1, help='总局数')
+    parser.add_argument('--games', type=int, default=10, help='总局数')
     parser.add_argument('--seed', type=int, default=42, help='随机种子')
 
     args = parser.parse_args()

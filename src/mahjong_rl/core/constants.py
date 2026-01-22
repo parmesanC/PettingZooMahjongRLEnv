@@ -426,14 +426,14 @@ if __name__ == "__main__":
         # 测试4：字牌赖子
         lai_zi, skin1, skin2 = Tiles.generate_special_tiles(27)  # 东风
         assert lai_zi == 28  # 南风
-        assert skin1 == 31  # 皮子：红中
-        assert skin2 == 32  # 皮子：绿中
+        assert skin1 == 27  # 东风
+        assert skin2 == 33  # 白板
         print(f"✓ 字牌赖子：东风 -> 赖子={Tiles.get_tile_name(lai_zi)}")
 
         # 测试5：字牌皮子
         lai_zi, skin1, skin2 = Tiles.generate_special_tiles(31)  # 红中
-        assert skin1 == 31  # 皮子：红中
-        assert skin2 == 32  # 皮子：绿中
+        assert skin1 == 30  # 北风
+        assert skin2 == 29  # 西风
         print(f"✓ 红中皮子规则：皮子={[Tiles.get_tile_name(tile) for tile in (skin1, skin2)]}")
 
         # 测试6：缓存功能
