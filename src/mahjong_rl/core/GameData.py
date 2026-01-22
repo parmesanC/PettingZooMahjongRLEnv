@@ -182,24 +182,35 @@ class GameContext:
         """
         获取当前响应者ID
 
+        返回 active_responders 列表中的当前响应者。
+        配合 WaitResponseState.enter() 的自动 PASS 优化使用。
+
         Returns:
             当前响应者索引，如果没有则返回 None
         """
-        if self.current_responder_idx < len(self.response_order):
-            return self.response_order[self.current_responder_idx]
+        if self.active_responder_idx < len(self.active_responders):
+            return self.active_responders[self.active_responder_idx]
         return None
 
     def move_to_next_responder(self) -> None:
-        """移动到下一个响应者"""
-        self.current_responder_idx += 1
+        """
+        移动到下一个响应者
+
+        移动 active_responder_idx 指针，用于遍历 active_responders 列表。
+        配合 WaitResponseState.enter() 的自动 PASS 优化使用。
+        """
+        self.active_responder_idx += 1
 
     def is_all_responded(self) -> bool:
         """
         检查是否所有玩家都已响应
 
+        检查 active_responders 列表中的所有玩家是否都已响应。
+        配合 WaitResponseState.enter() 的自动 PASS 优化使用。
+
         Returns:
             True 如果所有玩家都已响应
         """
-        return self.current_responder_idx >= len(self.response_order)
+        return self.active_responder_idx >= len(self.active_responders)
 
 
