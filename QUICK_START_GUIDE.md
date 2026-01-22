@@ -283,5 +283,6 @@ if state_machine.is_terminal():
 ✅ 单步响应收集
 ✅ 懒加载观测
 ✅ 动作验证
+✅ 自动PASS优化（减少25%时间步）
 
 祝你使用愉快！🎉

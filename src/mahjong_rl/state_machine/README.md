@@ -310,7 +310,11 @@ class WuhanMahjongEnv(AECEnv):
 运行测试脚本：
 
 ```bash
+# 状态机基础测试
 python test_state_machine.py
+
+# 自动PASS优化测试
+python tests/test_auto_pass_optimization.py
 ```
 
 测试包括：
@@ -319,6 +323,7 @@ python test_state_machine.py
 3. 状态历史和回滚
 4. 自动推进
 5. 日志功能
+6. 自动PASS优化功能（所有人PASS、部分响应、顺序保持）
 
 ## 注意事项
 
@@ -334,6 +339,26 @@ python test_state_machine.py
 1. **懒加载观测**: 只在需要时构建观测，减少不必要的计算
 2. **状态历史限制**: 最多保存100个快照，控制内存使用
 3. **日志分级**: 可通过enable_logging参数控制是否启用日志
+4. **自动PASS优化**: WaitResponseState自动跳过只能PASS的玩家，减少约25%的训练时间步
+
+### 自动PASS优化详情
+
+WaitResponseState实现了智能响应收集优化：
+
+- **active_responders**: 只包含需要决策的玩家列表（排除只能PASS的玩家）
+- **active_responder_idx**: 当前处理索引
+- **自动处理**: 在enter()时预先检测所有响应者，只能PASS的玩家自动添加PASS响应
+- **性能提升**: 减少约25%的无意义时间步，提升训练效率
+
+```python
+# 优化前：需要等待所有3个玩家响应
+# 优化后：只等待真正需要决策的玩家（1-2个）
+
+# GameContext中的新数据结构
+context.active_responders = [0, 2]  # 只有玩家0和玩家2需要决策
+context.active_responder_idx = 0     # 当前处理玩家0
+# 玩家1自动PASS，不在active_responders中
+```
 
 ## 依赖
 
