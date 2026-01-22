@@ -94,62 +94,55 @@ class WaitResponseState(GameState):
 
     def step(self, context: GameContext, action: Union[MahjongAction, str]) -> GameStateType:
         """
-        收集一个玩家的响应
-        
-        处理当前玩家的响应，移动到下一个响应者。
-        当所有玩家都响应后，选择最佳响应并转换状态。
-        
+        处理一个真实响应者的响应
+
         Args:
             context: 游戏上下文
-            action: 玩家响应动作（MahjongAction对象）或'auto'
-        
+            action: 玩家响应动作或'auto'
+
         Returns:
-            WAITING_RESPONSE (继续收集) 或下一个状态
-        
-        Raises:
-            ValueError: 如果响应玩家索引超出范围
+            WAITING_RESPONSE (继续) 或下一个状态
         """
-        current_responder = context.get_current_responder()
-        
-        if current_responder is None:
-            # 所有玩家都已响应，选择最佳响应
+        # 检查是否还有待处理的响应者
+        if context.active_responder_idx >= len(context.active_responders):
+            # 所有真实响应者都已处理
             return self._select_best_response(context)
-        
-        # 处理当前玩家的响应
+
+        # 获取当前真实响应者
+        current_responder = context.active_responders[context.active_responder_idx]
+
+        # 处理响应
         if action == 'auto':
-            # 如果是自动模式，默认PASS
             response_action = MahjongAction(ActionType.PASS, -1)
         else:
             response_action = action
-        
+
         # 验证动作有效性
         if not self._is_action_valid(context, current_responder, response_action):
-            # 无效动作默认为PASS
             response_action = MahjongAction(ActionType.PASS, -1)
-        
+
         # 添加到响应收集器
         priority = self._get_action_priority(response_action.action_type)
         context.response_collector.add_response(
             current_responder,
             response_action.action_type,
             priority,
-            response_action.parameter  # 添加参数
+            response_action.parameter
         )
-        
-        # 移动到下一个响应者
-        context.move_to_next_responder()
-        
-        # 检查是否所有玩家都已响应
-        if context.is_all_responded():
+
+        # 移动到下一个真实响应者
+        context.active_responder_idx += 1
+
+        # 检查是否还有待处理的响应者
+        if context.active_responder_idx >= len(context.active_responders):
+            # 所有真实响应者处理完毕
             return self._select_best_response(context)
 
-        # 为下一个响应者生成观测
-        next_responder = context.get_current_responder()
-        if next_responder is not None:
-            # 更新当前玩家索引到下一个响应者
-            context.current_player_idx = next_responder
-            # 立即生成观测和动作掩码
-            self.build_observation(context)
+        # 为下一个真实响应者生成观测
+        next_responder = context.active_responders[context.active_responder_idx]
+        context.current_player_idx = next_responder
+        # 立即生成观测和动作掩码
+        self.build_observation(context)
 
         return GameStateType.WAITING_RESPONSE
     
