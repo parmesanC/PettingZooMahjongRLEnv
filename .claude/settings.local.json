@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "mcp__web-reader__webReader",
+      "Bash(python:*)",
+      "Skill(superpowers:finishing-a-development-branch)",
+      "Bash(git -C \"D:\\\\DATA\\\\Python_Project\\\\Code\\\\PettingZooRLENVMahjong\" status)",
+      "Skill(superpowers:brainstorming)",
+      "Bash(where:*)",
+      "Bash(C:UsersZewei LiAppDataLocalMicrosoftWindowsAppspython.exe test_cli_display.py)",
+      "Bash(python3:*)",
+      "Bash(C:\\\\Users\\\\Zewei Li\\\\AppData\\\\Local\\\\Microsoft\\\\WindowsApps\\\\python.exe:*)",
+      "Bash(cmd:*)",
+      "Bash(powershell:*)",
+      "Bash(/c/Users/Zewei Li/AppData/Local/Microsoft/WindowsApps/python quick_test.py)"
+    ]
+  }
+}

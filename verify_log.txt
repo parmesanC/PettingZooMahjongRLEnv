@@ -1,0 +1,63 @@
+项目根目录: D:\DATA\Python_Project\Code\PettingZooRLENVMahjong
+
+1. 导入模块...
+✓ 导入成功
+
+2. 创建游戏上下文...
+✓ 游戏上下文创建成功
+
+3. 初始化规则引擎和观测构建器...
+✓ 初始化成功
+
+4. 创建状态机...
+✓ 状态机创建成功
+  当前状态类型: None
+
+5. 转换到初始状态...
+✓ 转换成功
+  当前状态类型: INITIAL
+
+6. 执行第一次 step...
+✓ Step 完成
+  下一个状态: PLAYER_DECISION
+  当前状态类型: PLAYER_DECISION
+
+7. 检查状态历史...
+✓ 状态历史记录数: 2
+  快照 0: INITIAL
+  快照 1: PLAYER_DECISION
+
+8. 测试回滚...
+  回滚前状态: PLAYER_DECISION
+✓ 回滚成功
+  回滚后状态: INITIAL
+
+9. 测试自动推进...
+
+  步骤 1:
+    当前状态: INITIAL
+    下一个状态: PLAYER_DECISION
+
+  步骤 2:
+    当前状态: PLAYER_DECISION
+    动作: 打出牌 32
+    下一个状态: DISCARDING
+
+  步骤 3:
+    当前状态: DISCARDING
+    ✗ Step 失败: 'str' object has no attribute 'action_type'
+Traceback (most recent call last):
+  File "D:\DATA\Python_Project\Code\PettingZooRLENVMahjong\run_verify.py", line 110, in <module>
+    next_state = state_machine.step(context, 'auto')
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\DATA\Python_Project\Code\PettingZooRLENVMahjong\src\mahjong_rl\state_machine\machine.py", line 256, in step
+    next_state_type = self.current_state.step(context, action)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\DATA\Python_Project\Code\PettingZooRLENVMahjong\src\mahjong_rl\state_machine\states\discarding_state.py", line 83, in step
+    if action.action_type != ActionType.DISCARD:
+       ^^^^^^^^^^^^^^^^^^
+AttributeError: 'str' object has no attribute 'action_type'
+
+============================================================
+✓ 所有测试完成！
+============================================================

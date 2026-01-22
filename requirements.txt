@@ -1,0 +1,9 @@
+# FastAPI版本依赖
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+websockets>=12.0
+
+# 原有依赖（保持兼容）
+numpy>=1.24.0
+gymnasium>=0.28.0
+pettingzoo>=1.24.0
