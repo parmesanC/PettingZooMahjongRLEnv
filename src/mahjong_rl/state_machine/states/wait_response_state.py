@@ -48,33 +48,47 @@ class WaitResponseState(GameState):
     def enter(self, context: GameContext) -> None:
         """
         进入等待响应状态
-        
-        初始化响应收集器，设置响应顺序，并为第一个响应者生成观测。
-        
-        Args:
-            context: 游戏上下文
+
+        优化：自动处理只能 PASS 的玩家
         """
         context.current_state = GameStateType.WAITING_RESPONSE
-        
+
         # 初始化响应收集器
         import sys
         import os
         sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
         from mahjong_rl.state_machine.ResponseCollector import ResponseCollector
         context.response_collector = ResponseCollector()
-        
-        # 确保响应顺序已设置
+
+        # 确保响应顺序已设置（自动排除出牌者）
         if not context.response_order:
             context.setup_response_order(context.discard_player)
-        
-        # 重置当前响应者索引
-        context.current_responder_idx = 0
 
-        # 为第一个响应者生成观测
-        current_responder = context.get_current_responder()
-        if current_responder is not None:
-            # 更新当前玩家索引到当前响应者
-            context.current_player_idx = current_responder
+        # 构建真实响应者列表（排除只能 PASS 的玩家）
+        context.active_responders = []
+        context.active_responder_idx = 0
+
+        for responder_id in context.response_order:
+            if not self._can_only_pass(context, responder_id):
+                # 需要决策的玩家
+                context.active_responders.append(responder_id)
+            else:
+                # 只能 PASS，自动添加响应
+                context.response_collector.add_response(
+                    responder_id,
+                    ActionType.PASS,
+                    ResponsePriority.PASS,
+                    -1  # PASS 无参数
+                )
+
+        # 检查是否需要响应
+        if not context.active_responders:
+            # 所有人都只能 PASS，直接选择最佳响应
+            self._select_best_response(context)
+        else:
+            # 为第一个真实响应者生成观测
+            first_responder = context.active_responders[0]
+            context.current_player_idx = first_responder
             # 立即生成观测和动作掩码
             self.build_observation(context)
 
