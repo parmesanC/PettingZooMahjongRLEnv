@@ -20,6 +20,10 @@ from src.mahjong_rl.core.mahjong_action import MahjongAction
 from src.mahjong_rl.observation.builder import IObservationBuilder
 from src.mahjong_rl.rules.base import IRuleEngine
 
+# 日志系统导入
+from src.mahjong_rl.logging.base import ILogger
+from src.mahjong_rl.logging.formatters import LogLevel, LogType
+
 
 class StateLogger:
     """
@@ -129,18 +133,28 @@ class MahjongStateMachine:
         context: 游戏上下文引用
     """
     
-    def __init__(self, rule_engine: IRuleEngine, observation_builder: IObservationBuilder, enable_logging: bool = True):
+    def __init__(
+        self,
+        rule_engine: IRuleEngine,
+        observation_builder: IObservationBuilder,
+        logger: Optional[ILogger] = None,
+        enable_logging: bool = True
+    ):
         """
         初始化状态机
-        
+
         Args:
             rule_engine: 规则引擎实例，用于验证动作和检测可用动作
             observation_builder: 观测构建器实例，用于生成RL观测
-            enable_logging: 是否启用日志记录
+            logger: 外部日志器（ILogger 实例）
+            enable_logging: 是否启用内部 StateLogger（用于兼容）
         """
         self.rule_engine = rule_engine
         self.observation_builder = observation_builder
-        self.logger = StateLogger() if enable_logging else None
+
+        # 日志系统：优先使用外部 logger，否则使用内部 StateLogger
+        self.external_logger = logger
+        self.internal_logger = StateLogger() if enable_logging else None
         
         # 注册所有状态
         self._register_states()
@@ -223,10 +237,13 @@ class MahjongStateMachine:
         # 记录快照（不包括终端状态）
         if new_state_type not in [GameStateType.WIN, GameStateType.FLOW_DRAW]:
             self._save_snapshot(context)
-        
-        # 记录日志
-        if self.logger:
-            self.logger.log_transition(old_state_type, new_state_type, context)
+
+        # 记录状态转换日志（外部 logger 和内部 logger）
+        if self.external_logger:
+            self.external_logger.log_state_transition(old_state_type, new_state_type, context)
+
+        if self.internal_logger:
+            self.internal_logger.log_transition(old_state_type, new_state_type, context)
         
         # 进入新状态
         self.current_state.enter(context)
@@ -253,8 +270,11 @@ class MahjongStateMachine:
             raise RuntimeError("State machine not initialized. Call transition_to() first.")
         
         # 记录动作日志（仅手动状态）
-        if self.logger and action != 'auto':
-            self.logger.log_action(context.current_player_idx, action, context)
+        if action != 'auto':
+            if self.external_logger:
+                self.external_logger.log_action(context.current_player_idx, action, context)
+            if self.internal_logger:
+                self.internal_logger.log_action(context.current_player_idx, action, context)
         
         # 执行当前状态的step方法
         next_state_type = self.current_state.step(context, action)
@@ -339,14 +359,14 @@ class MahjongStateMachine:
         
         # 截断历史记录
         self.state_history = self.state_history[:-(steps + 1)]
-        
+
         # 恢复状态
         self.current_state_type = snapshot['state_type']
         self.current_state = self.states[self.current_state_type]
-        
-        if self.logger:
-            self.logger.log(f"Rolled back {steps} steps to {self.current_state_type.name}")
-        
+
+        if self.internal_logger:
+            self.internal_logger.log(f"Rolled back {steps} steps to {self.current_state_type.name}")
+
         return snapshot['context']
     
     def get_history(self) -> List[Dict]:
@@ -361,14 +381,16 @@ class MahjongStateMachine:
     def clear_history(self):
         """清空状态历史"""
         self.state_history.clear()
-        if self.logger:
-            self.logger.log("State history cleared")
+        if self.internal_logger:
+            self.internal_logger.log("State history cleared")
     
-    def get_logger(self) -> Optional[StateLogger]:
+    def get_logger(self) -> Optional[Union[ILogger, StateLogger]]:
         """
         获取日志记录器
-        
+
+        优先返回外部 logger，如果没有则返回内部 StateLogger
+
         Returns:
             日志记录器实例，如果未启用则返回None
         """
-        return self.logger
+        return self.external_logger or self.internal_logger

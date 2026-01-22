@@ -29,7 +29,7 @@ def test_four_ai_game():
     strategies = [RandomStrategy() for _ in range(4)]
 
     # 重置环境
-    observation, info = env.reset(seed=42)
+    env.reset(seed=42)
     print(f"\n游戏开始！初始agent: {env.agent_selection}")
     print(f"初始状态: {env.state_machine.current_state_type.name}")
 

@@ -4,7 +4,7 @@ MahjongEnv状态机集成示例
 展示如何在MahjongEnv中集成MahjongStateMachine，实现完整的PettingZoo AECEnv。
 """
 
-from typing import Dict, Tuple, Any
+from typing import Dict, Tuple, Any, Optional
 import numpy as np
 from gymnasium import spaces
 from pettingzoo import AECEnv
@@ -16,6 +16,17 @@ from src.mahjong_rl.state_machine.machine import MahjongStateMachine
 from src.mahjong_rl.rules.wuhan_7p4l_rule_engine import Wuhan7P4LRuleEngine
 from src.mahjong_rl.observation.wuhan_7p4l_observation_builder import Wuhan7P4LObservationBuilder
 from src.mahjong_rl.rules.round_info import RoundInfo
+
+# 日志系统导入
+from src.mahjong_rl.logging.base import ILogger
+from src.mahjong_rl.logging import (
+    CompositeLogger,
+    FileLogger,
+    GameRecorder,
+    PerfMonitor,
+    LogLevel,
+    LogFormatter
+)
 
 
 class WuhanMahjongEnv(AECEnv):
@@ -31,15 +42,43 @@ class WuhanMahjongEnv(AECEnv):
     # 动作空间：参数化动作
     ACTION_SPACE = len(ActionType)  # 11种动作类型
     PARAM_SPACE = 35  # 34种牌 + 1个通配符
-    
-    def __init__(self, render_mode=None, training_phase=3, enable_logging=True):
+
+    # 默认日志配置
+    DEFAULT_LOG_CONFIG = {
+        "file_logger": {
+            "enabled": True,
+            "log_dir": "logs",
+            "level": "INFO"
+        },
+        "game_recorder": {
+            "enabled": False,
+            "replay_dir": "replays"
+        },
+        "perf_monitor": {
+            "enabled": False,
+            "perf_dir": "performance"
+        }
+    }
+
+    def __init__(
+        self,
+        render_mode=None,
+        training_phase=3,
+        enable_logging=True,
+        log_config=None,
+        logger=None,
+        enable_perf_monitor=False
+    ):
         """
         初始化环境
 
         Args:
             render_mode: 渲染模式
             training_phase: 训练阶段（影响信息可见度）
-            enable_logging: 是否启用状态机日志
+            enable_logging: 是否启用日志系统
+            log_config: 日志配置字典（覆盖默认配置）
+            logger: 自定义日志器（如果提供，则忽略 log_config）
+            enable_perf_monitor: 是否启用性能监控
         """
         super().__init__()
 
@@ -48,7 +87,7 @@ class WuhanMahjongEnv(AECEnv):
         self.possible_agents = [f"player_{i}" for i in range(self.num_players)]
         self.agents = self.possible_agents[:]
         self.agents_name_mapping = {name: i for i, name in enumerate(self.agents)}
-        
+
         # 定义观测空间
         self.observation_spaces = self._create_observation_spaces()
         self.action_spaces = {
@@ -57,7 +96,12 @@ class WuhanMahjongEnv(AECEnv):
                 spaces.Discrete(self.PARAM_SPACE)  # 动作参数
             )) for agent in self.possible_agents
         }
-        
+
+        # 初始化日志系统
+        self.logger = self._setup_logger(logger, log_config, enable_logging, enable_perf_monitor)
+        self.current_game_id: Optional[str] = None
+        self._game_logged = False  # 跟踪游戏是否已记录结束
+
         # 初始化状态机
         self.context: GameContext = None
         self.state_machine: MahjongStateMachine = None
@@ -95,11 +139,98 @@ class WuhanMahjongEnv(AECEnv):
                 'remaining_tiles': spaces.Discrete(137),
                 'dealer': spaces.MultiDiscrete([4]),
                 'current_phase': spaces.Discrete(8),
-                'action_mask': spaces.MultiBinary(278),  # 扁平化动作掩码
+                'action_mask': spaces.MultiBinary(244),  # 扁平化动作掩码
             })
         
         return observation_spaces
-    
+
+    def _setup_logger(
+        self,
+        logger: Optional[ILogger],
+        log_config: Optional[Dict],
+        enable_logging: bool,
+        enable_perf_monitor: bool
+    ) -> Optional[ILogger]:
+        """
+        设置日志系统
+
+        Args:
+            logger: 自定义日志器
+            log_config: 日志配置
+            enable_logging: 是否启用日志
+            enable_perf_monitor: 是否启用性能监控
+
+        Returns:
+            配置好的日志器，如果禁用则返回 None
+        """
+        # 如果禁用日志，返回 None
+        if not enable_logging:
+            return None
+
+        # 如果提供了自定义日志器，直接使用
+        if logger is not None:
+            return logger
+
+        # 合并默认配置和用户配置
+        config = self.DEFAULT_LOG_CONFIG.copy()
+        if log_config is not None:
+            for key, value in log_config.items():
+                if key in config and isinstance(value, dict):
+                    config[key].update(value)
+                else:
+                    config[key] = value
+
+        # 强制启用性能监控（如果指定）
+        if enable_perf_monitor:
+            config["perf_monitor"]["enabled"] = True
+
+        # 创建组合日志器
+        loggers = []
+
+        # 文件日志器
+        if config["file_logger"]["enabled"]:
+            file_config = config["file_logger"]
+            level = LogLevel[file_config.get("level", "INFO")]
+            loggers.append(FileLogger(
+                log_dir=file_config.get("log_dir", "logs"),
+                level=level
+            ))
+
+        # 对局记录器
+        if config["game_recorder"]["enabled"]:
+            recorder_config = config["game_recorder"]
+            loggers.append(GameRecorder(
+                replay_dir=recorder_config.get("replay_dir", "replays")
+            ))
+
+        # 性能监控器
+        if config["perf_monitor"]["enabled"]:
+            perf_config = config["perf_monitor"]
+            loggers.append(PerfMonitor(
+                perf_dir=perf_config.get("perf_dir", "performance"),
+                enabled=True
+            ))
+
+        # 如果没有任何日志器，返回 None
+        if not loggers:
+            return None
+
+        # 创建组合日志器
+        if len(loggers) == 1:
+            return loggers[0]
+        return CompositeLogger(loggers)
+
+    def _get_total_steps(self) -> int:
+        """
+        获取当前游戏的总步数
+
+        Returns:
+            总步数
+        """
+        if self.context and hasattr(self.context, 'action_history'):
+            return len(self.context.action_history)
+        return 0
+
     def reset(self, seed=None, options=None):
         """
         重置环境
@@ -130,21 +261,36 @@ class WuhanMahjongEnv(AECEnv):
         # 设置初始agent selection
         self.agent_selection = self.possible_agents[0]
 
+        # 生成游戏 ID
+        self.current_game_id = LogFormatter.generate_game_id()
+
         # 创建空 GameContext，并传入 round_info（由 InitialState 完成初始化）
         self.context = GameContext()
         self.context.round_info = self.round_info
-        
+
         # 初始化规则引擎和观测构建器
         rule_engine = Wuhan7P4LRuleEngine(self.context)
         observation_builder = Wuhan7P4LObservationBuilder(self.context)
-        
-        # 创建状态机
+
+        # 创建状态机，传递 logger
         self.state_machine = MahjongStateMachine(
             rule_engine=rule_engine,
             observation_builder=observation_builder,
+            logger=self.logger,
             enable_logging=self.enable_logging
         )
         self.state_machine.set_context(self.context)
+
+        # 记录游戏开始
+        if self.logger:
+            self.logger.start_game(self.current_game_id, {
+                "seed": seed,
+                "training_phase": self.training_phase,
+                "num_players": self.num_players
+            })
+
+        # 重置游戏结束标志
+        self._game_logged = False
         
         # 转换到初始状态
         self.state_machine.transition_to(GameStateType.INITIAL, self.context)
@@ -241,13 +387,18 @@ class WuhanMahjongEnv(AECEnv):
             traceback.print_exc()
             return self.observe(current_agent), -1.0, True, False, {'error': str(e)}
 
+        # 状态转换后立即更新 agent_selection（确保 observation 同步）
+        if not self.state_machine.is_terminal():
+            self.agent_selection = self.state_machine.get_current_agent()
+
         # 自动推进：只处理自动状态，在需要agent动作的状态停止
         while not self.state_machine.is_terminal():
             current_state = self.state_machine.current_state_type
 
-            # 需要agent动作的三个状态 - 停止自动推进
+            # 需要agent动作的四个状态 - 停止自动推进
             if current_state in [
                 GameStateType.PLAYER_DECISION,
+                GameStateType.MELD_DECISION,
                 GameStateType.WAITING_RESPONSE,
                 GameStateType.WAIT_ROB_KONG
             ]:
@@ -269,9 +420,29 @@ class WuhanMahjongEnv(AECEnv):
         
         # 获取观测
         observation = self.observe(self.agent_selection)
-        
+
         # 计算奖励（简化版本，实际应根据游戏结果计算）
         reward = self._calculate_reward(agent_idx)
+
+        # 记录对局步骤（如果有 GameRecorder）
+        if self.logger:
+            # 获取 GameRecorder（支持直接是 GameRecorder 或在 CompositeLogger 中）
+            game_recorder = None
+            if isinstance(self.logger, GameRecorder):
+                game_recorder = self.logger
+            elif isinstance(self.logger, CompositeLogger):
+                game_recorder = self.logger.get_logger(GameRecorder)
+
+            if game_recorder:
+                prev_observation = self.observe(current_agent)
+                game_recorder.record_step(
+                    agent=current_agent,
+                    observation=prev_observation,
+                    action={"type": action[0], "param": action[1]},
+                    reward=reward,
+                    next_observation=observation,
+                    info={}
+                )
 
         # 更新 rewards 字典（PettingZoo AECEnv 要求）
         self.rewards[current_agent] = reward
@@ -281,9 +452,20 @@ class WuhanMahjongEnv(AECEnv):
         truncated = False
         info = self._get_info(agent_idx)
 
-        # 游戏结束时更新 round_info（用于下一局确定庄家）
+        # 游戏结束时更新 round_info（用于下一局确定庄家）并记录结果
         if terminated:
             self._update_round_info()
+
+            # 记录游戏结束
+            if self.logger and not self._game_logged:
+                result = {
+                    "winners": list(self.context.winner_ids) if self.context.is_win else [],
+                    "is_flush": self.context.is_flush,
+                    "win_way": self.context.win_way if self.context.is_win else None,
+                    "total_steps": self._get_total_steps()
+                }
+                self.logger.end_game(result)
+                self._game_logged = True
 
         # PettingZoo AEC规范：终端状态下移除所有agents
         if terminated or truncated:
@@ -477,8 +659,28 @@ class WuhanMahjongEnv(AECEnv):
             pass
     
     def close(self):
-        """关闭环境"""
-        pass
+        """
+        关闭环境
+
+        确保即使游戏没有正常结束也记录日志。
+        """
+        # 如果游戏没有正常结束，记录未完成的游戏
+        if self.logger and not self._game_logged and self.context is not None:
+            result = {
+                "winners": [],
+                "is_flush": self.context.is_flush if hasattr(self.context, 'is_flush') else False,
+                "incomplete": True,
+                "total_steps": self._get_total_steps(),
+                "reason": "env_closed_without_termination"
+            }
+            self.logger.end_game(result)
+            self._game_logged = True
+
+        # 关闭所有日志器
+        if self.logger and hasattr(self.logger, 'close_all'):
+            self.logger.close_all()
+        elif self.logger and hasattr(self.logger, 'close'):
+            self.logger.close()
 
 
 # 使用示例

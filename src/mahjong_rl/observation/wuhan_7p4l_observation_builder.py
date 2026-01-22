@@ -18,9 +18,9 @@ ACTION_MASK_RANGES = {
     'KONG_CONCEALED': (106, 140), # 106-139: 可暗杠的牌
     'KONG_RED': (140, 174),      # 140-173: 红中杠（仅红中位置）
     'KONG_LAZY': (174, 208),     # 174-207: 赖子杠（仅赖子位置）
-    'KONG_SKIN': (208, 276),     # 208-275: 两个皮子杠（各34位）
-    'WIN': (276, 277),           # 276: 是否可胡
-    'PASS': (277, 278),          # 277: 是否可过
+    'KONG_SKIN': (208, 242),     # 208-241: 皮子杠（34位，只标记手牌中存在的皮子）
+    'WIN': (242, 243),           # 242: 是否可胡
+    'PASS': (243, 244),          # 243: 是否可过
 }
 
 STATE_TO_PHASE = {
@@ -75,18 +75,19 @@ class Wuhan7P4LObservationBuilder(IObservationBuilder):
 
     def build_action_mask(self, player_id: int, context: GameContext) -> np.ndarray:
         """
-        构建动作掩码 - 返回扁平化的278位二进制数组
+        构建动作掩码 - 返回扁平化的244位二进制数组
 
         Returns:
-            np.ndarray: 形状为 (278,) 的二进制数组
+            np.ndarray: 形状为 (244,) 的二进制数组
         """
-        mask = np.zeros(278, dtype=np.int8)
+        mask = np.zeros(244, dtype=np.int8)
 
         current_state = context.current_state
         player = context.players[player_id]
 
-        # 检查手牌是否已正确初始化（至少有13张牌）
-        if len(player.hand_tiles) < 13:
+        # 检查手牌是否已正确初始化（至少有1张牌）
+        # 鸣牌后手牌可能少于13张（吃牌11张，碰牌10张）
+        if len(player.hand_tiles) < 1:
             return mask
 
         if current_state == GameStateType.MELD_DECISION:
@@ -156,13 +157,12 @@ class Wuhan7P4LObservationBuilder(IObservationBuilder):
                     mask[174 + lazy_tile] = 1
 
             elif action_type == ActionType.KONG_SKIN.value:
-                # 皮子杠：两个皮子位置 (索引 208-275)
-                for i, skin_tile in enumerate(context.skin_tile):
-                    if skin_tile != -1:
-                        mask[208 + i * 34 + skin_tile] = 1
+                # 皮子杠：只标记 ActionValidator 检测到的实际可用的皮子杠动作
+                # action.parameter 就是手牌中实际存在的皮子牌ID
+                mask[208 + action.parameter] = 1
 
             elif action_type == ActionType.WIN.value:
-                mask[276] = 1  # WIN 位
+                mask[242] = 1  # WIN 位
 
         # 确保 DISCARD 可用（后备逻辑）
         if not np.any(mask[:34] > 0):
@@ -205,10 +205,8 @@ class Wuhan7P4LObservationBuilder(IObservationBuilder):
                     mask[174 + lazy_tile] = 1
 
             elif action_type == ActionType.KONG_SKIN.value:
-                # 皮子杠：两个皮子位置 (索引 208-275)
-                for i, skin_tile in enumerate(context.skin_tile):
-                    if skin_tile != -1:
-                        mask[208 + i * 34 + skin_tile] = 1
+                # 皮子杠：只标记 ActionValidator 检测到的实际可用的皮子杠动作
+                mask[208 + action.parameter] = 1
 
             # 处理 DISCARD
             elif action_type == ActionType.DISCARD.value:
@@ -250,10 +248,10 @@ class Wuhan7P4LObservationBuilder(IObservationBuilder):
                     mask[38 + action.parameter] = 1
 
                 elif action_type == ActionType.WIN.value:
-                    mask[276] = 1
+                    mask[242] = 1
 
             # PASS 在响应状态总是可用
-            mask[277] = 1
+            mask[243] = 1
 
         return mask
 

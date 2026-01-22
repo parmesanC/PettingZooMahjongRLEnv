@@ -151,28 +151,35 @@ class WaitResponseState(GameState):
     def _select_best_response(self, context: GameContext) -> GameStateType:
         """
         选择最佳响应并转换状态
-        
+
         使用ResponseCollector选择最佳响应（考虑优先级和距离），
         然后根据响应类型决定下一个状态。
-        
+
         Args:
             context: 游戏上下文
-        
+
         Returns:
             下一个状态类型 (WIN, GONG, PROCESSING_MELD, 或 DRAWING)
         """
         best_response = context.response_collector.get_best_response(context)
-        
+
         if best_response is None:
             # 检查牌墙是否为空，如果为空则流局
             if len(context.wall) == 0:
                 return GameStateType.FLOW_DRAW
-            
+
             # 所有玩家都PASS，下一个玩家摸牌
             next_player = (context.discard_player + 1) % 4
             context.current_player_idx = next_player
             return GameStateType.DRAWING
-        
+
+        # 检查最佳响应是否为PASS（所有玩家都过牌）
+        if best_response.action_type == ActionType.PASS:
+            # 所有玩家都PASS，下一个玩家摸牌
+            next_player = (context.discard_player + 1) % 4
+            context.current_player_idx = next_player
+            return GameStateType.DRAWING
+
         # 根据最佳响应类型转换状态
         if best_response.action_type == ActionType.WIN:
             # 和牌
@@ -180,22 +187,20 @@ class WaitResponseState(GameState):
             context.is_win = True
             context.win_way = 3  # WinWay.DISCARD
             return GameStateType.WIN
-        
+
         elif best_response.action_type == ActionType.KONG_EXPOSED:
             # 明杠
             context.selected_responder = best_response.player_id
             return GameStateType.GONG
-        
+
         elif best_response.action_type in [ActionType.CHOW, ActionType.PONG]:
             # 吃或碰
             context.selected_responder = best_response.player_id
             return GameStateType.PROCESSING_MELD
-        
+
         else:
-            # PASS
-            next_player = (context.discard_player + 1) % 4
-            context.current_player_idx = next_player
-            return GameStateType.DRAWING
+            # 不应该到达这里
+            raise ValueError(f"Unexpected action type in _select_best_response: {best_response.action_type}")
     
     def _is_action_valid(self, context: GameContext, player_id: int, action: MahjongAction) -> bool:
         """
