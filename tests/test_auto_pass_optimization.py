@@ -7,7 +7,8 @@ import os
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.mahjong_rl.core.GameData import GameContext, Player
+from src.mahjong_rl.core.GameData import GameContext
+from src.mahjong_rl.core.PlayerData import PlayerData
 from src.mahjong_rl.core.constants import Tiles
 from src.mahjong_rl.state_machine.states.wait_response_state import WaitResponseState
 from src.mahjong_rl.rules.wuhan_7p4l_rule_engine import Wuhan7P4LRuleEngine
@@ -29,9 +30,9 @@ class TestAutoPassOptimization:
         """测试所有人只能 PASS 的场景"""
         # 设置一个所有人只能 PASS 的场景
         # 创建3个玩家
-        player0 = Player(player_id=0)
-        player1 = Player(player_id=1)
-        player2 = Player(player_id=2)
+        player0 = PlayerData(player_id=0)
+        player1 = PlayerData(player_id=1)
+        player2 = PlayerData(player_id=2)
 
         self.context.players = [player0, player1, player2]
         self.context.current_player_idx = 0
@@ -68,9 +69,9 @@ class TestAutoPassOptimization:
     def test_partial_responders(self):
         """测试部分玩家可以响应的场景"""
         # 设置场景：3个玩家中只有1个能碰牌
-        player0 = Player(player_id=0)
-        player1 = Player(player_id=1)
-        player2 = Player(player_id=2)
+        player0 = PlayerData(player_id=0)
+        player1 = PlayerData(player_id=1)
+        player2 = PlayerData(player_id=2)
 
         self.context.players = [player0, player1, player2]
         self.context.current_player_idx = 0
@@ -115,10 +116,10 @@ class TestAutoPassOptimization:
     def test_response_order_preserved(self):
         """测试响应顺序不被改变"""
         # 设置场景：4个玩家中2个能响应
-        player0 = Player(player_id=0)
-        player1 = Player(player_id=1)
-        player2 = Player(player_id=2)
-        player3 = Player(player_id=3)
+        player0 = PlayerData(player_id=0)
+        player1 = PlayerData(player_id=1)
+        player2 = PlayerData(player_id=2)
+        player3 = PlayerData(player_id=3)
 
         self.context.players = [player0, player1, player2, player3]
         self.context.current_player_idx = 0
@@ -167,8 +168,8 @@ class TestAutoPassOptimization:
     def test_empty_response_order(self):
         """测试空响应顺序的场景"""
         # 设置一个没有需要响应玩家的场景
-        player0 = Player(player_id=0)
-        player1 = Player(player_id=1)
+        player0 = PlayerData(player_id=0)
+        player1 = PlayerData(player_id=1)
 
         self.context.players = [player0, player1]
         self.context.current_player_idx = 0
@@ -194,9 +195,9 @@ class TestAutoPassOptimization:
     def test_single_responder(self):
         """测试单个响应者的场景"""
         # 设置场景：只有1个玩家能响应
-        player0 = Player(player_id=0)
-        player1 = Player(player_id=1)
-        player2 = Player(player_id=2)
+        player0 = PlayerData(player_id=0)
+        player1 = PlayerData(player_id=1)
+        player2 = PlayerData(player_id=2)
 
         self.context.players = [player0, player1, player2]
         self.context.current_player_idx = 0
