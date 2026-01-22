@@ -68,6 +68,10 @@ class GameContext:
     selected_responder: Optional[int] = None  # 最终被选中的响应者
     last_kong_action: Optional[MahjongAction] = None  # 最后一次杠牌动作（供GongState使用）
 
+    # 响应状态优化：真实响应者列表（排除只能 PASS 的玩家）
+    active_responders: List[int] = field(default_factory=list)  # 真实需要响应的玩家列表
+    active_responder_idx: int = 0  # 当前在 active_responders 中的索引
+
     # 历史记录
     action_history: List[ActionRecord] = field(default_factory=list)
 
