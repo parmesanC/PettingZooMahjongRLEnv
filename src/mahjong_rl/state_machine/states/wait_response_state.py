@@ -175,6 +175,9 @@ class WaitResponseState(GameState):
 
         # 检查最佳响应是否为PASS（所有玩家都过牌）
         if best_response.action_type == ActionType.PASS:
+            # 检查牌墙是否为空，如果为空则流局
+            if len(context.wall) == 0:
+                return GameStateType.FLOW_DRAW
             # 所有玩家都PASS，下一个玩家摸牌
             next_player = (context.discard_player + 1) % 4
             context.current_player_idx = next_player
@@ -230,6 +233,10 @@ class WaitResponseState(GameState):
             return True
         
         # 检查动作是否在可用动作列表中
+        # PONG, KONG_EXPOSED 的 parameter 可忽略（被自动确定）
+        if action.action_type in [ActionType.PONG, ActionType.KONG_EXPOSED]:
+            return any(a.action_type == action.action_type for a in available_actions)
+
         return any(
             a.action_type == action.action_type and a.parameter == action.parameter
             for a in available_actions
@@ -238,10 +245,10 @@ class WaitResponseState(GameState):
     def _get_action_priority(self, action_type: ActionType) -> ResponsePriority:
         """
         获取动作优先级
-        
+
         Args:
             action_type: 动作类型
-        
+
         Returns:
             动作优先级
         """
@@ -253,3 +260,30 @@ class WaitResponseState(GameState):
             ActionType.PASS: ResponsePriority.PASS,
         }
         return priority_map.get(action_type, ResponsePriority.PASS)
+
+    def _can_only_pass(self, context: GameContext, player_id: int) -> bool:
+        """
+        检查玩家是否只能 PASS
+
+        Args:
+            context: 游戏上下文
+            player_id: 玩家ID
+
+        Returns:
+            True 如果只能 PASS，False 如果有其他可用动作
+        """
+        player = context.players[player_id]
+        discard_tile = context.last_discarded_tile
+        discard_player = context.discard_player
+
+        # 获取可用动作
+        available_actions = self.rule_engine.detect_available_actions_after_discard(
+            player, discard_tile, discard_player
+        )
+
+        # 检查是否有非 PASS 的动作
+        for action in available_actions:
+            if action.action_type != ActionType.PASS:
+                return False
+
+        return True
