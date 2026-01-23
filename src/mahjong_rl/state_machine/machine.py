@@ -213,14 +213,15 @@ class MahjongStateMachine:
     def transition_to(self, new_state_type: GameStateType, context: GameContext):
         """
         转换到新状态
-        
+
         执行状态转换的完整流程：
         1. 退出当前状态
         2. 设置新状态
         3. 保存快照（不包括终端状态）
         4. 记录转换日志
         5. 进入新状态
-        
+        6. 【新增】检查是否需要自动跳过
+
         Args:
             new_state_type: 目标状态类型
             context: 游戏上下文
@@ -228,12 +229,12 @@ class MahjongStateMachine:
         # 退出当前状态
         if self.current_state:
             self.current_state.exit(context)
-        
+
         # 设置新状态（先设置，确保快照中的state_type正确）
         old_state_type = self.current_state_type
         self.current_state_type = new_state_type
         self.current_state = self.states[new_state_type]
-        
+
         # 记录快照（不包括终端状态）
         if new_state_type not in [GameStateType.WIN, GameStateType.FLOW_DRAW]:
             self._save_snapshot(context)
@@ -244,9 +245,14 @@ class MahjongStateMachine:
 
         if self.internal_logger:
             self.internal_logger.log_transition(old_state_type, new_state_type, context)
-        
+
         # 进入新状态
         self.current_state.enter(context)
+
+        # 【新增】检查是否需要自动跳过
+        if self.current_state.should_auto_skip(context):
+            # TODO: Call _auto_skip_state(context) in Task 6
+            self._auto_skip_state(context)
     
     def step(self, context: GameContext, action: Union[MahjongAction, str] = 'auto') -> Optional[GameStateType]:
         """
