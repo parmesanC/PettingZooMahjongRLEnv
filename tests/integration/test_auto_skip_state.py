@@ -78,7 +78,7 @@ def test_wait_response_no_skip_when_has_responders():
     context.players = [PlayerData(player_id=i) for i in range(4)]
 
     # 给玩家1一张可以碰的牌
-    context.players[1].hand_tiles = [Tiles.ONE_CHAR.value, Tiles.ONE_CHAR.value, Tiles.TWO_CHAR.value]
+    context.players[1].hand_tiles = [Tiles.ONE_CHAR.value, Tiles.ONE_CHAR.value, Tiles.ONE_CHAR.value]
     context.current_player_idx = 0
 
     # 设置弃牌（一张万子牌）
