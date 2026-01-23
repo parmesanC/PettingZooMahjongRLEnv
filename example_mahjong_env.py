@@ -379,6 +379,8 @@ class WuhanMahjongEnv(AECEnv):
             return self.observe(current_agent), -1.0, False, False, {'error': str(e)}
 
         # 执行状态机step
+        # 注意：自动跳过逻辑（如所有玩家只能 PASS）已由状态机的 auto-skip pattern 处理
+        # 不需要在此处额外检测和转换
         try:
             next_state_type = self.state_machine.step(self.context, mahjong_action)
         except Exception as e:
@@ -387,7 +389,7 @@ class WuhanMahjongEnv(AECEnv):
             traceback.print_exc()
             return self.observe(current_agent), -1.0, True, False, {'error': str(e)}
 
-        # 状态转换后立即更新 agent_selection（确保 observation 同步）
+        # 状态转换后更新 agent_selection
         if not self.state_machine.is_terminal():
             self.agent_selection = self.state_machine.get_current_agent()
 
