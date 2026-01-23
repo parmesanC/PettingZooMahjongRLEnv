@@ -62,3 +62,24 @@ class GameState(ABC):
         """生成当前状态的观测和动作掩码（通用实现，子类可重写）"""
         context.observation = self.observation_builder.build(context.current_player_idx, context)
         context.action_mask = self.observation_builder.build_action_mask(context.current_player_idx, context)
+
+    def should_auto_skip(self, context: GameContext) -> bool:
+        """
+        检查是否应该自动跳过此状态
+
+        默认实现：不跳过
+        子类可以重写此方法以支持自动跳过逻辑
+
+        设计意图：
+        - 允许状态声明"可以被自动跳过"
+        - 由状态机在 transition_to() 中统一处理自动转换
+        - 避免在 enter() 中包含状态转换逻辑
+
+        Args:
+            context: 游戏上下文
+
+        Returns:
+            True 表示应该自动跳过（使用空动作执行 step）
+            False 表示需要等待 agent 输入
+        """
+        return False
