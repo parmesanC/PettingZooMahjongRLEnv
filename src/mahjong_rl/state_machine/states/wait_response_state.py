@@ -101,6 +101,9 @@ class WaitResponseState(GameState):
         """
         处理一个真实响应者的响应
 
+        如果 active_responders 为空（所有玩家都只能 PASS），
+        直接调用 _select_best_response() 返回下一个状态。
+
         Args:
             context: 游戏上下文
             action: 玩家响应动作或'auto'
@@ -108,6 +111,11 @@ class WaitResponseState(GameState):
         Returns:
             WAITING_RESPONSE (继续) 或下一个状态
         """
+        # 关键修复：如果 active_responders 为空（所有玩家都只能 PASS），
+        # 直接选择最佳响应，无需等待任何输入
+        if not context.active_responders:
+            return self._select_best_response(context)
+
         # 检查是否还有待处理的响应者
         if context.active_responder_idx >= len(context.active_responders):
             # 所有真实响应者都已处理
