@@ -187,6 +187,18 @@ class SimpleCLIRenderer:
         print("  字: 27=东风, 28=南风, 29=西风, 30=北风, 31=红中, 32=发财, 33=白板")
     
     def _format_meld(self, meld):
-        """格式化副露"""
-        tile_name = Tiles.get_tile_name(meld.tiles[0])
-        return f"{tile_name}×{len(meld.tiles)}"
+        """格式化副露
+
+        根据动作类型显示不同格式：
+        - CHOW: 显示所有牌（如 "1条 2条 3条"）
+        - PONG: 显示缩写（如 "1条×3"）
+        - KONG: 显示缩写（如 "1条×4"）
+        """
+        # 检查是否为吃牌（显示所有牌）
+        if meld.is_chow:
+            tile_names = [Tiles.get_tile_name(t) for t in meld.tiles]
+            return " ".join(tile_names)
+        else:
+            # 碰牌和杠牌显示缩写
+            tile_name = Tiles.get_tile_name(meld.tiles[0])
+            return f"{tile_name}×{len(meld.tiles)}"
