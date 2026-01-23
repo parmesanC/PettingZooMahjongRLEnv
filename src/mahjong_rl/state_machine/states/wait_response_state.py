@@ -49,7 +49,14 @@ class WaitResponseState(GameState):
         """
         进入等待响应状态
 
-        优化：自动处理只能 PASS 的玩家
+        职责：仅初始化，不执行任何状态转换逻辑
+        - 初始化响应收集器
+        - 构建响应者列表（区分需要决策和只能 PASS 的玩家）
+        - 为需要决策的玩家生成观测
+
+        设计原则：
+        - SRP: enter() 只负责初始化
+        - 状态转换逻辑由 should_auto_skip() 和 transition_to() 处理
         """
         context.current_state = GameStateType.WAITING_RESPONSE
 
@@ -64,7 +71,7 @@ class WaitResponseState(GameState):
         if not context.response_order:
             context.setup_response_order(context.discard_player)
 
-        # 构建真实响应者列表（排除只能 PASS 的玩家）
+        # 构建响应者列表
         context.active_responders = []
         context.active_responder_idx = 0
 
@@ -81,15 +88,13 @@ class WaitResponseState(GameState):
                     -1  # PASS 无参数
                 )
 
-        # 检查是否需要响应
-        if not context.active_responders:
-            # 所有人都只能 PASS，直接选择最佳响应
-            self._select_best_response(context)
-        else:
-            # 为第一个真实响应者生成观测
+        # 关键修改：如果所有玩家都只能 PASS，不在这里调用 _select_best_response
+        # 而是通过 should_auto_skip() 让状态机处理自动跳过
+
+        # 如果有需要决策的玩家，为第一个生成观测
+        if context.active_responders:
             first_responder = context.active_responders[0]
             context.current_player_idx = first_responder
-            # 立即生成观测和动作掩码
             self.build_observation(context)
 
     def step(self, context: GameContext, action: Union[MahjongAction, str]) -> GameStateType:
