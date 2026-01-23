@@ -73,6 +73,11 @@ class CompositeLogger(ILogger):
         for logger in self.loggers:
             logger.end_game(result)
 
+    def log_info(self, message: str) -> None:
+        """记录信息日志 - 转发给所有子日志器"""
+        for logger in self.loggers:
+            logger.log_info(message)
+
     def get_logger(self, logger_type: type) -> Optional[ILogger]:
         """
         获取指定类型的日志器

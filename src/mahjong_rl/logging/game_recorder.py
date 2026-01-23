@@ -161,6 +161,10 @@ class GameRecorder(ILogger):
         """记录性能指标（对局记录器不记录性能）"""
         pass
 
+    def log_info(self, message: str) -> None:
+        """记录信息日志（对局记录器不记录通用信息）"""
+        pass
+
     def get_current_game_id(self) -> Optional[str]:
         """获取当前游戏 ID"""
         return self.current_game_id

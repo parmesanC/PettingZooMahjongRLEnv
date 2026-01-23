@@ -166,6 +166,10 @@ class FileLogger(ILogger):
         self.log(LogLevel.INFO, LogType.GAME_END, data)
         self.current_game_id = None
 
+    def log_info(self, message: str) -> None:
+        """记录信息日志"""
+        self.log(LogLevel.INFO, LogType.STATE_TRANSITION, {"message": message})
+
     def close(self):
         """关闭日志器"""
         if self._queue:

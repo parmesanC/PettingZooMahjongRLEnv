@@ -79,6 +79,16 @@ class ILogger(ABC):
         pass
 
     @abstractmethod
+    def log_info(self, message: str) -> None:
+        """
+        记录信息日志
+
+        Args:
+            message: 日志消息
+        """
+        pass
+
+    @abstractmethod
     def end_game(self, result: Dict):
         """
         结束游戏记录
