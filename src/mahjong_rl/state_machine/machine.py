@@ -251,9 +251,33 @@ class MahjongStateMachine:
 
         # 【新增】检查是否需要自动跳过
         if self.current_state.should_auto_skip(context):
-            # TODO: Call _auto_skip_state(context) in Task 6
             self._auto_skip_state(context)
-    
+
+    def _auto_skip_state(self, context: GameContext) -> None:
+        """
+        自动跳过当前状态
+
+        当状态的 should_auto_skip() 返回 True 时调用，
+        使用 'auto' 动作执行 step()，触发状态转换。
+
+        设计意图：
+        - 统一处理自动跳过逻辑
+        - 避免 enter() 中包含状态转换代码
+        - 支持递归自动跳过（跳过后的状态也可能需要跳过）
+
+        Args:
+            context: 游戏上下文
+        """
+        if self.external_logger:
+            self.external_logger.log_info(f"Auto-skipping state {self.current_state_type.name}")
+
+        # 执行 step()，传入 'auto' 动作
+        next_state_type = self.current_state.step(context, 'auto')
+
+        # 如果需要转换状态
+        if next_state_type is not None and next_state_type != self.current_state_type:
+            self.transition_to(next_state_type, context)
+
     def step(self, context: GameContext, action: Union[MahjongAction, str] = 'auto') -> Optional[GameStateType]:
         """
         执行一步游戏
