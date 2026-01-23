@@ -141,19 +141,6 @@ class PerfMonitor(ILogger):
         pass
 
     def start_game(self, game_id: str, config: Dict):
-        """记录性能指标"""
-        if not self.enabled:
-            return
-
-        log_entry = {
-            "timestamp": LogFormatter.format_timestamp(),
-            "game_id": self.current_game_id or "unknown",
-            "metrics": metrics
-        }
-
-        self.metrics_buffer.append(log_entry)
-
-    def start_game(self, game_id: str, config: Dict):
         """开始新游戏监控"""
         if not self.enabled:
             return
