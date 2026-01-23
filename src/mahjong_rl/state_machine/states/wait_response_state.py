@@ -299,3 +299,24 @@ class WaitResponseState(GameState):
                 return False
 
         return True
+
+    def should_auto_skip(self, context: GameContext) -> bool:
+        """
+        检查是否应该自动跳过此状态
+
+        如果所有玩家都只能 PASS，则自动跳过，无需等待任何输入。
+        这允许状态机在 transition_to() 中自动推进到下一个状态。
+
+        设计意图：
+        - 避免在 enter() 中执行状态转换逻辑
+        - 由状态机统一处理自动跳过
+        - 保持 enter() 的单一职责（初始化）
+
+        Args:
+            context: 游戏上下文
+
+        Returns:
+            True 如果所有玩家都只能 PASS（应该自动跳过）
+            False 如果有玩家需要决策
+        """
+        return len(context.active_responders) == 0
