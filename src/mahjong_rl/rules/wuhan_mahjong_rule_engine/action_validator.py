@@ -57,6 +57,10 @@ class ActionValidator:
         if self._can_kong_exposed(current_player, discard_tile):
             available_actions.append(MahjongAction(ActionType.KONG_EXPOSED, discard_tile))
 
+        # 6. 判断接炮胡牌（优先级最高，高于所有吃碰杠）
+        if self._can_win_by_discard(current_player, discard_tile):
+            available_actions.append(MahjongAction(ActionType.WIN, -1))
+
         return available_actions
 
     # --------------------------- 核心动作判断逻辑 ---------------------------
