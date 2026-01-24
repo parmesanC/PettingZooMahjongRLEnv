@@ -103,6 +103,11 @@ class Wuhan7P4LObservationBuilder(IObservationBuilder):
             # 响应状态
             mask = self._build_response_mask(player, context, mask)
 
+        elif current_state == GameStateType.WAIT_ROB_KONG:
+            # 抢杠和状态：只能 WIN 或 PASS
+            mask[143] = 1  # WIN 位
+            mask[144] = 1  # PASS 位
+
         return mask
 
     def _build_decision_mask(self, player, context, mask):
