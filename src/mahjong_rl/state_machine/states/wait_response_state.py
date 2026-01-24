@@ -205,7 +205,10 @@ class WaitResponseState(GameState):
 
         # 根据最佳响应类型转换状态
         if best_response.action_type == ActionType.WIN:
-            # 和牌
+            # 和牌 - 接炮胡牌需要将弃牌加入玩家手牌
+            winner = context.players[best_response.player_id]
+            winner.hand_tiles.append(context.last_discarded_tile)
+
             context.winner_ids = [best_response.player_id]
             context.is_win = True
             context.win_way = 3  # WinWay.DISCARD
