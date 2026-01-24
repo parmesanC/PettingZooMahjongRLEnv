@@ -201,15 +201,55 @@ class ActionValidator:
         win_checker = WuhanMahjongWinChecker(self.context)
         result = win_checker.check_win(temp_player)
         if result.can_win:
-            # 计算每个玩家的分数
+            # 修复问题3：调用 score_calculator 的方法检查起胡番
             from src.mahjong_rl.rules.wuhan_mahjong_rule_engine.score_calculator import MahjongScoreSettler
             score_calculator = MahjongScoreSettler(False)
-            score_list = score_calculator.settle(result, self.context)
-            winer_score = max(score_list)
-            # 如果和所有玩家番数都达到和牌标准，起胡番：16
-            if all(abs(score) + winer_score >= 16 for score in score_list):
+            can_win = score_calculator.check_min_fan_requirement(
+                current_player.player_id, result.win_type, self.context
+            )
+            if can_win:
                 available_actions.append(MahjongAction(ActionType.WIN, -1))
             return available_actions
 
         return available_actions
+
+    def _can_win_by_discard(self, current_player: PlayerData, discard_tile: int) -> bool:
+        """
+        判断是否可以接炮胡牌
+
+        将弃牌临时加入玩家手牌，检查是否可以胡牌，并检查起胡番要求。
+
+        Args:
+            current_player: 当前玩家
+            discard_tile: 弃牌编码
+
+        Returns:
+            True 如果可以接炮胡牌
+        """
+        # 创建临时手牌（加入弃牌）
+        temp_hand = current_player.hand_tiles.copy()
+        temp_hand.append(discard_tile)
+
+        # 创建临时玩家对象
+        temp_player = PlayerData(
+            player_id=current_player.player_id,
+            hand_tiles=temp_hand,
+            melds=current_player.melds.copy(),
+            special_gangs=current_player.special_gangs.copy()
+        )
+
+        # 检查是否可以胡牌
+        from src.mahjong_rl.rules.wuhan_mahjong_rule_engine.win_detector import WuhanMahjongWinChecker
+        win_checker = WuhanMahjongWinChecker(self.context)
+        result = win_checker.check_win(temp_player)
+
+        if not result.can_win:
+            return False
+
+        # 检查起胡番要求
+        from src.mahjong_rl.rules.wuhan_mahjong_rule_engine.score_calculator import MahjongScoreSettler
+        score_calculator = MahjongScoreSettler(False)
+        return score_calculator.check_min_fan_requirement(
+            current_player.player_id, result.win_type, self.context
+        )
 
