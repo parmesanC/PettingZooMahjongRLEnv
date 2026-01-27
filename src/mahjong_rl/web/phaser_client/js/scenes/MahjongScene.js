@@ -346,8 +346,8 @@ export default class MahjongScene extends Phaser.Scene {
             // 添加特殊牌效果
             this.addSpecialTileEffects(tile, tileId, x, y, tileScale);
 
-            // 添加交互（TODO: 后续实现）
-            this.setHandTileInteractivity(tile, i);
+            // 添加交互（带打牌动画）
+            this.setHandTileInteractivity(tile, i, tileId, sortedTiles);
 
             this.handGroups[0].add(tile);
         }
@@ -753,7 +753,7 @@ export default class MahjongScene extends Phaser.Scene {
     /**
      * 设置手牌交互
      */
-    setHandTileInteractivity(tile, index) {
+    setHandTileInteractivity(tile, index, tileId, sortedTiles) {
         tile.setInteractive();
 
         tile.on('pointerover', () => {
@@ -765,9 +765,71 @@ export default class MahjongScene extends Phaser.Scene {
         });
 
         tile.on('pointerdown', () => {
-            console.log(`Tile ${index} clicked`);
-            // TODO: 触发出牌动作
+            console.log(`Tile ${index} (${tileId}) clicked`);
+            this.playDiscardAnimation(tile, tileId, index, sortedTiles);
         });
+    }
+
+    /**
+     * 播放打牌动画
+     */
+    playDiscardAnimation(tile, tileId, index, sortedTiles) {
+        const scale = window.GLOBAL_SCALE_RATE;
+        const canvasWidth = this.cameras.main.width;
+        const canvasHeight = this.cameras.main.height;
+
+        // 计算弃牌河的目标位置
+        const player = this.gameState.players[0];
+        const newDiscardIndex = player.discard_tiles.length;
+        const tileScale = scale * 0.35;
+        const startX = canvasWidth - 400 * scale;
+        const startY = canvasHeight - 180 * scale;
+        const tileWidth = 72 * tileScale;
+        const tileHeight = 109 * tileScale;
+        const gap = 2 * scale;
+        const rowSize = 6;
+
+        const row = Math.floor(newDiscardIndex / rowSize);
+        const col = newDiscardIndex % rowSize;
+
+        const targetX = startX + col * (tileWidth + gap);
+        const targetY = startY - row * (tileHeight + gap);
+
+        // 播放动画
+        this.tweens.add({
+            targets: tile,
+            x: targetX,
+            y: targetY,
+            scaleX: tileScale,
+            scaleY: tileScale,
+            duration: 300,
+            ease: 'Power2',
+            onComplete: () => {
+                // 动画完成后，更新游戏状态
+                this.updateAfterDiscard(tileId, index, sortedTiles);
+            }
+        });
+    }
+
+    /**
+     * 打牌后更新游戏状态
+     */
+    updateAfterDiscard(tileId, index, sortedTiles) {
+        const player = this.gameState.players[0];
+
+        // 从手牌中移除
+        const originalIndex = player.hand_tiles.indexOf(tileId);
+        if (originalIndex > -1) {
+            player.hand_tiles.splice(originalIndex, 1);
+        }
+
+        // 添加到弃牌河
+        player.discard_tiles.push(tileId);
+
+        // 重新渲染
+        this.render();
+
+        console.log(`Discarded tile ${tileId}. Remaining hand:`, player.hand_tiles);
     }
 
     /**
