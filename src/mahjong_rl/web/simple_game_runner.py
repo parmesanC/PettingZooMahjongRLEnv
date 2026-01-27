@@ -40,6 +40,7 @@ class SimpleGameRunner:
 
         print(f"✓ 环境初始化完成")
         print(f"  - 当前玩家: {self.current_context.current_player_idx}")
+        print(f"  - agent_selection: {self.env.agent_selection}")
         print(f"  - 赖子: {self.current_context.lazy_tile}")
         print(f"  - 皮子: {self.current_context.skin_tile}")
 
@@ -51,14 +52,15 @@ class SimpleGameRunner:
             action: (action_type, parameter) 元组
             player_id: 发送动作的玩家ID
         """
-        current_player = self.env.agent_selection
+        # 使用 context 的 current_player_idx 进行验证
+        current_player_idx = self.current_context.current_player_idx
 
-        if player_id is not None and player_id != self.env.possible_agents.index(current_player):
-            print(f"警告: 玩家{player_id}尝试在玩家{current_player}的回合行动")
+        if player_id is not None and player_id != current_player_idx:
+            print(f"警告: 玩家{player_id}尝试在玩家{current_player_idx}的回合行动")
             return
 
         action_type, parameter = action
-        print(f"收到动作: type={action_type}, param={parameter}, player={current_player}")
+        print(f"收到动作: type={action_type}, param={parameter}, player={current_player_idx}")
 
         # 执行动作
         try:

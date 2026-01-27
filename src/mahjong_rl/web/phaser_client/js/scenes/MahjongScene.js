@@ -128,17 +128,14 @@ export default class MahjongScene extends Phaser.Scene {
         // 创建游戏界面元素
         this.createGameBoard();
 
-        // 初始化测试数据（后续替换为真实数据）
-        this.initTestData();
-
-        // 初始化WebSocket连接
+        // 初始化WebSocket连接（连接后会接收真实数据）
         this.initWebSocket();
 
         // 创建动作按钮
         this.createActionButtons();
 
-        // 渲染初始状态
-        this.render();
+        // 显示等待连接提示
+        this.showWaitingMessage();
     }
 
     /**
@@ -1160,6 +1157,9 @@ export default class MahjongScene extends Phaser.Scene {
      * 更新游戏状态
      */
     updateState(newState) {
+        // 移除等待消息
+        this.hideWaitingMessage();
+
         // 兼容后端返回的状态格式
         if (newState.current_state !== undefined) {
             // 后端状态：将数字转换为字符串
@@ -1179,6 +1179,33 @@ export default class MahjongScene extends Phaser.Scene {
 
         this.gameState = { ...this.gameState, ...newState };
         this.render();
+    }
+
+    /**
+     * 显示等待连接消息
+     */
+    showWaitingMessage() {
+        const scale = window.GLOBAL_SCALE_RATE;
+        const centerX = this.cameras.main.width / 2;
+        const centerY = this.cameras.main.height / 2;
+
+        this.waitingText = this.add.text(centerX, centerY, '正在连接服务器...', {
+            fontFamily: 'Microsoft YaHei',
+            fontSize: 32 * scale + 'px',
+            color: '#FFFF00',
+            backgroundColor: '#000000',
+            padding: { x: 20 * scale, y: 15 * scale }
+        }).setOrigin(0.5).setDepth(500);
+    }
+
+    /**
+     * 隐藏等待连接消息
+     */
+    hideWaitingMessage() {
+        if (this.waitingText) {
+            this.waitingText.destroy();
+            this.waitingText = null;
+        }
     }
 
     /**

@@ -94,6 +94,12 @@ class MahjongFastAPIServer:
             self.websocket_manager.active_connections.append(websocket)
             print(f"✓ 玩家{player_id}连接，总连接数: {len(self.websocket_manager.active_connections)}")
 
+            # 连接成功后立即发送当前状态
+            if hasattr(self.controller, 'get_current_context'):
+                context = self.controller.get_current_context()
+                if context:
+                    self.send_json_state(context, player_id)
+
             try:
                 while True:
                     # 接收消息
