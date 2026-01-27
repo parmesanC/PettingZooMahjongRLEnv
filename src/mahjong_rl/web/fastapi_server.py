@@ -4,6 +4,7 @@ FastAPI麻将游戏服务器
 """
 import os
 from typing import Dict
+import json
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
@@ -85,34 +86,43 @@ class MahjongFastAPIServer:
                     status_code=404
                 )
         
-        # WebSocket路由
-        @self.app.websocket("/ws")
-        async def websocket_endpoint(websocket: WebSocket):
-            """WebSocket端点"""
-            # 使用WebSocket管理器
-            await self.websocket_manager.connect(websocket)
-            
+        # WebSocket路由 - 支持玩家ID参数
+        @self.app.websocket("/ws/{player_id}")
+        async def websocket_endpoint(websocket: WebSocket, player_id: int):
+            """WebSocket端点 - 支持玩家ID参数"""
+            await websocket.accept()
+            self.websocket_manager.active_connections.append(websocket)
+            print(f"✓ 玩家{player_id}连接，总连接数: {len(self.websocket_manager.active_connections)}")
+
             try:
                 while True:
                     # 接收消息
                     data = await websocket.receive_text()
-                    
-                    # 解析并处理
-                    import json
                     message = json.loads(data)
-                    
+
                     if message['type'] == 'action':
-                        self.controller.on_action_received(
-                            (message['actionType'], message['parameter'])
-                        )
-                    
+                        # 解析动作
+                        action_type = message['action_type']
+                        parameter = message.get('parameter', 0)
+
+                        # 调用控制器处理动作
+                        self.controller.on_action_received((action_type, parameter), player_id)
+
+                    elif message['type'] == 'get_state':
+                        # 请求当前状态
+                        if hasattr(self.controller, 'get_current_context'):
+                            context = self.controller.get_current_context()
+                            self.send_json_state(context, player_id)
+
             except WebSocketDisconnect:
-                self.websocket_manager.disconnect(websocket)
-                print("WebSocket客户端断开连接")
-            
+                if websocket in self.websocket_manager.active_connections:
+                    self.websocket_manager.active_connections.remove(websocket)
+                print(f"✓ 玩家{player_id}断开连接")
+
             except Exception as e:
-                print(f"WebSocket错误: {e}")
-                self.websocket_manager.disconnect(websocket)
+                print(f"WebSocket错误 (玩家{player_id}): {e}")
+                if websocket in self.websocket_manager.active_connections:
+                    self.websocket_manager.active_connections.remove(websocket)
     
     def _mount_static_files(self):
         """挂载静态文件目录"""
@@ -161,6 +171,26 @@ class MahjongFastAPIServer:
             'html': html
         }
         self.websocket_manager.broadcast_sync(message)
+
+    def send_json_state(self, context, observer_player_idx: int = 0):
+        """
+        发送JSON格式的游戏状态
+
+        Args:
+            context: 游戏上下文 (GameContext)
+            observer_player_idx: 观察者玩家索引
+        """
+        from .state_serializer import StateSerializer
+
+        state_dict = StateSerializer.serialize(context, observer_player_idx)
+
+        message = {
+            'type': 'game_state',
+            'state': state_dict
+        }
+
+        self.websocket_manager.broadcast_sync(message)
+        print(f"📡 已发送游戏状态 (玩家{observer_player_idx}视角)")
     
     def start(self):
         """启动FastAPI服务器"""
