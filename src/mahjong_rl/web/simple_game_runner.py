@@ -80,6 +80,16 @@ class SimpleGameRunner:
             action: (action_type, parameter) 元组
             player_id: 发送动作的玩家ID
         """
+        action_type, parameter = action
+
+        # 处理重启请求 (action_type = -1)
+        if action_type == -1:
+            print(f"\n{'='*60}")
+            print("收到重启请求，开始新的一局...")
+            print(f"{'='*60}")
+            self.restart_game()
+            return
+
         # 使用 context 的 current_player_idx 进行验证
         current_player_idx = self.current_context.current_player_idx
 
@@ -87,7 +97,6 @@ class SimpleGameRunner:
             print(f"警告: 玩家{player_id}尝试在玩家{current_player_idx}的回合行动")
             return
 
-        action_type, parameter = action
         player_source = f"玩家{current_player_idx} ({'人类' if self.strategies[current_player_idx] is None else 'AI'})"
         print(f"收到动作: type={action_type}, param={parameter}, source={player_source}")
 
@@ -110,6 +119,31 @@ class SimpleGameRunner:
 
         except Exception as e:
             print(f"执行动作失败: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def restart_game(self):
+        """重启游戏，开始新的一局"""
+        try:
+            # 重置环境
+            print("正在重置环境...")
+            obs, info = self.env.reset()
+            self.current_context = self.env.unwrapped.context
+
+            print(f"✓ 新的一局开始！")
+            print(f"  - 当前玩家: {self.current_context.current_player_idx}")
+            print(f"  - 赖子: {self.current_context.lazy_tile}")
+            print(f"  - 皮子: {self.current_context.skin_tile}")
+
+            # 发送新状态到前端
+            self.send_state_to_all()
+
+            # 如果第一个玩家是AI，立即执行AI动作
+            if self.ai_enabled:
+                self._check_and_execute_ai()
+
+        except Exception as e:
+            print(f"重启游戏失败: {e}")
             import traceback
             traceback.print_exc()
 
