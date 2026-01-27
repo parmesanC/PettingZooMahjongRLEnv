@@ -852,6 +852,86 @@ export default class MahjongScene extends Phaser.Scene {
 
         // 显示剩余牌数
         this.renderWallCount(centerX, centerY, scale);
+
+        // 显示当前玩家指示器
+        this.renderCurrentPlayerIndicator(centerX, centerY, scale);
+
+        // 显示游戏状态
+        this.renderGameState(centerX, centerY, scale);
+    }
+
+    /**
+     * 渲染当前玩家指示器
+     */
+    renderCurrentPlayerIndicator(centerX, centerY, scale) {
+        const currentPlayer = this.gameState.current_player_idx;
+        const relativePos = getRelativePosition(currentPlayer, this.selfPlayerIdx);
+
+        // 根据相对位置确定指示器位置
+        const positions = [
+            { x: centerX, y: centerY + 120 * scale },      // 自己 - 下方
+            { x: centerX + 120 * scale, y: centerY },      // 下家 - 右方
+            { x: centerX, y: centerY - 120 * scale },      // 对家 - 上方
+            { x: centerX - 120 * scale, y: centerY }       // 上家 - 左方
+        ];
+
+        const pos = positions[relativePos];
+
+        // 绘制指示器圆圈
+        const graphics = this.add.graphics();
+        graphics.fillStyle(0x00FF00, 0.8);
+        graphics.fillCircle(pos.x, pos.y, 15 * scale);
+        graphics.setDepth(700);
+
+        this.layers.ui.add(graphics);
+
+        // 添加闪烁动画
+        this.tweens.add({
+            targets: graphics,
+            alpha: 0.3,
+            duration: 500,
+            yoyo: true,
+            repeat: -1
+        });
+    }
+
+    /**
+     * 渲染游戏状态
+     */
+    renderGameState(centerX, centerY, scale) {
+        const state = this.gameState.current_state;
+
+        const style = {
+            fontFamily: 'Microsoft YaHei',
+            fontSize: 18 * scale + 'px',
+            color: '#00FF00',
+            fontStyle: 'bold',
+            backgroundColor: '#000000',
+            padding: { x: 10 * scale, y: 5 * scale }
+        };
+
+        // 状态名称映射
+        const stateNames = {
+            'INITIAL': '初始化',
+            'DRAWING': '摸牌中',
+            'PLAYER_DECISION': '请出牌',
+            'DISCARDING': '出牌中',
+            'WAITING_RESPONSE': '等待响应',
+            'GONG': '杠牌',
+            'WIN': '和牌！',
+            'FLOW_DRAW': '流局'
+        };
+
+        const stateText = stateNames[state] || state;
+
+        const text = this.add.text(
+            centerX,
+            centerY - 80 * scale,
+            stateText,
+            style
+        ).setOrigin(0.5);
+
+        this.layers.ui.add(text);
     }
 
     /**
