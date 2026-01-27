@@ -966,18 +966,9 @@ export default class MahjongScene extends Phaser.Scene {
             this.wsManager.sendAction(0, tileId);
         }
 
-        // 本地临时更新（等待服务器确认后会覆盖）
-        const player = this.gameState.players[0];
-        const originalIndex = player.hand_tiles.indexOf(tileId);
-        if (originalIndex > -1) {
-            player.hand_tiles.splice(originalIndex, 1);
-        }
-        player.discard_tiles.push(tileId);
-
-        // 重新渲染
-        this.render();
-
-        console.log(`Discarded tile ${tileId}. Waiting for server confirmation...`);
+        // 不再本地临时更新，直接等待服务器确认
+        // 服务器会发送新的游戏状态，updateState 会处理
+        console.log(`已发送打牌动作: tileId=${tileId}, 等待服务器确认...`);
     }
 
     /**
@@ -1193,6 +1184,11 @@ export default class MahjongScene extends Phaser.Scene {
     handleWebSocketMessage(message) {
         switch (message.type) {
             case 'game_state':
+                // 只处理属于自己视角的状态更新
+                if (message.observer_player_idx !== undefined && message.observer_player_idx !== this.playerId) {
+                    console.log(`跳过玩家${message.observer_player_idx}视角的状态更新`);
+                    return;
+                }
                 this.updateState(message.state);
                 break;
 
