@@ -134,6 +134,9 @@ export default class MahjongScene extends Phaser.Scene {
         // 初始化WebSocket连接
         this.initWebSocket();
 
+        // 创建动作按钮
+        this.createActionButtons();
+
         // 渲染初始状态
         this.render();
     }
@@ -198,6 +201,80 @@ export default class MahjongScene extends Phaser.Scene {
         );
 
         this.layers.board.add(graphics);
+    }
+
+    /**
+     * 创建动作按钮
+     */
+    createActionButtons() {
+        const scale = window.GLOBAL_SCALE_RATE;
+        const centerX = this.cameras.main.width / 2;
+        const buttonY = this.cameras.main.height - 250 * scale;
+
+        // 按钮配置
+        const buttons = [
+            { text: '过', action: 10, x: centerX - 150 * scale },
+            { text: '碰', action: 2, x: centerX - 75 * scale },
+            { text: '杠', action: 3, x: centerX },
+            { text: '胡', action: 9, x: centerX + 75 * scale }
+        ];
+
+        this.actionButtons = [];
+
+        buttons.forEach(btn => {
+            const button = this.add.text(btn.x, buttonY, btn.text, {
+                fontFamily: 'Microsoft YaHei',
+                fontSize: 24 * scale + 'px',
+                color: '#ffffff',
+                backgroundColor: '#4CAF50',
+                padding: { x: 15 * scale, y: 10 * scale }
+            }).setOrigin(0.5).setDepth(1500);
+
+            button.setData('action', btn.action);
+            button.setInteractive();
+            button.setVisible(false);  // 默认隐藏
+
+            button.on('pointerdown', () => {
+                this.onActionButtonClick(btn.action);
+            });
+
+            this.actionButtons.push(button);
+            this.layers.ui.add(button);
+        });
+    }
+
+    /**
+     * 动作按钮点击处理
+     */
+    onActionButtonClick(actionType) {
+        console.log('动作按钮点击:', actionType);
+
+        if (this.wsManager) {
+            this.wsManager.sendAction(actionType, 0);
+        }
+
+        // 隐藏所有按钮
+        this.hideActionButtons();
+    }
+
+    /**
+     * 显示动作按钮
+     */
+    showActionButtons(availableActions) {
+        // 根据可用动作显示对应按钮
+        // TODO: 根据action_mask显示可用按钮
+        this.actionButtons.forEach(btn => {
+            btn.setVisible(true);
+        });
+    }
+
+    /**
+     * 隐藏动作按钮
+     */
+    hideActionButtons() {
+        this.actionButtons.forEach(btn => {
+            btn.setVisible(false);
+        });
     }
 
     /**
@@ -1066,8 +1143,8 @@ export default class MahjongScene extends Phaser.Scene {
                 break;
 
             case 'action_prompt':
-                // TODO: 显示动作提示UI
-                console.log('动作提示:', message);
+                // 显示动作按钮
+                this.showActionButtons(message.action_mask);
                 break;
 
             case 'game_over':
