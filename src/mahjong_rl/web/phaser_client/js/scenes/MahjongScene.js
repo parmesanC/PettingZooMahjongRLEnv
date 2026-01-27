@@ -266,6 +266,38 @@ export default class MahjongScene extends Phaser.Scene {
     }
 
     /**
+     * 更新动作按钮状态
+     */
+    updateActionButtons(actionMask) {
+        if (!actionMask) {
+            this.hideActionButtons();
+            return;
+        }
+
+        // action_mask 的索引对应：
+        // 0: DISCARD, 1: CHOW, 2: PONG, 3: KONG_EXPOSED,
+        // 4: KONG_SUPPLEMENT, 5: KONG_CONCEALED, 6: KONG_RED,
+        // 7: KONG_SKIN, 8: KONG_LAZY, 9: WIN, 10: PASS
+
+        this.actionButtons.forEach(btn => {
+            const action = btn.getData('action');
+            const isAvailable = actionMask[action] === 1;
+
+            // 设置可见性
+            btn.setVisible(isAvailable);
+
+            // 设置样式：可用为绿色，不可用为灰色
+            if (isAvailable) {
+                btn.setStyle({ backgroundColor: '#4CAF50' });
+                btn.setInteractive();
+            } else {
+                btn.setStyle({ backgroundColor: '#888888' });
+                btn.disableInteractive();
+            }
+        });
+    }
+
+    /**
      * 隐藏动作按钮
      */
     hideActionButtons() {
@@ -1189,12 +1221,12 @@ export default class MahjongScene extends Phaser.Scene {
                     console.log(`跳过玩家${message.observer_player_idx}视角的状态更新`);
                     return;
                 }
-                this.updateState(message.state);
+                this.updateState(message.state, message.action_mask);
                 break;
 
             case 'initial_state':
                 if (message.state) {
-                    this.updateState(message.state);
+                    this.updateState(message.state, message.action_mask);
                 }
                 break;
 
@@ -1215,7 +1247,7 @@ export default class MahjongScene extends Phaser.Scene {
     /**
      * 更新游戏状态
      */
-    updateState(newState) {
+    updateState(newState, actionMask) {
         // 移除等待消息
         this.hideWaitingMessage();
 
@@ -1238,6 +1270,13 @@ export default class MahjongScene extends Phaser.Scene {
 
         this.gameState = { ...this.gameState, ...newState };
         this.render();
+
+        // 根据action_mask显示/隐藏动作按钮
+        if (actionMask && this.gameState.current_player_idx === this.playerId) {
+            this.updateActionButtons(actionMask);
+        } else {
+            this.hideActionButtons();
+        }
     }
 
     /**

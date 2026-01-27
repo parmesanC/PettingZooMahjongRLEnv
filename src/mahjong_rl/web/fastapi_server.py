@@ -178,13 +178,14 @@ class MahjongFastAPIServer:
         }
         self.websocket_manager.broadcast_sync(message)
 
-    def send_json_state(self, context, observer_player_idx: int = 0):
+    def send_json_state(self, context, observer_player_idx: int = 0, action_mask=None):
         """
         发送JSON格式的游戏状态
 
         Args:
             context: 游戏上下文 (GameContext)
             observer_player_idx: 观察者玩家索引
+            action_mask: 可用动作掩码
         """
         from .state_serializer import StateSerializer
 
@@ -193,17 +194,11 @@ class MahjongFastAPIServer:
         message = {
             'type': 'game_state',
             'state': state_dict,
-            'observer_player_idx': observer_player_idx
+            'observer_player_idx': observer_player_idx,
+            'action_mask': action_mask
         }
 
-        # 只发送给对应玩家ID的连接
-        for ws in self.websocket_manager.active_connections:
-            # 检查这个连接对应的玩家ID
-            # 由于URL是 /ws/{player_id}，我们需要从连接信息中获取player_id
-            # 这里我们简单处理：广播所有消息，但前端会根据observer_player_idx过滤
-            pass
-
-        # 目前使用广播，但前端会检查 observer_player_idx 是否匹配
+        # 广播消息，前端会根据observer_player_idx过滤
         self.websocket_manager.broadcast_sync(message)
         print(f"📡 已发送游戏状态 (玩家{observer_player_idx}视角)")
     

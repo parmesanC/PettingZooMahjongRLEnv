@@ -20,21 +20,24 @@ from src.mahjong_rl.agents.ai.random_strategy import RandomStrategy
 class SimpleGameRunner:
     """简单的游戏运行器，支持AI玩家"""
 
-    def __init__(self, port=8011, human_players=1):
+    def __init__(self, port=8011, human_players=1, ai_delay=0.5):
         """
         初始化游戏运行器
 
         Args:
             port: WebSocket服务器端口
             human_players: 人类玩家数量（0-4），其余为AI
+            ai_delay: AI思考延迟时间（秒），用于观察游戏过程
         """
         self.port = port
         self.human_players = human_players
+        self.ai_delay = ai_delay
         self.env = None
         self.server = None
         self.current_context = None
         self.strategies = []
         self.ai_enabled = human_players < 4
+        self.current_action_masks = [None] * 4  # 存储每个玩家的动作掩码
 
     def setup(self):
         """设置环境和服务器"""
@@ -148,6 +151,10 @@ class SimpleGameRunner:
             执行的动作，如果无法执行则返回None
         """
         try:
+            # AI思考延迟
+            if self.ai_delay > 0:
+                time.sleep(self.ai_delay)
+
             # 获取当前玩家的观测
             current_agent = self.env.possible_agents[player_idx]
             obs, reward, terminated, truncated, info = self.env.last()
@@ -195,7 +202,22 @@ class SimpleGameRunner:
         if self.server and self.current_context:
             # 给每个玩家发送对应视角的状态
             for player_idx in range(4):
-                self.server.send_json_state(self.current_context, player_idx)
+                # 获取当前玩家的 action_mask
+                action_mask = self._get_action_mask(player_idx)
+                self.server.send_json_state(
+                    self.current_context,
+                    player_idx,
+                    action_mask
+                )
+
+    def _get_action_mask(self, player_idx):
+        """获取指定玩家的 action_mask"""
+        try:
+            current_agent = self.env.possible_agents[player_idx]
+            obs, reward, terminated, truncated, info = self.env.last()
+            return obs['action_mask'] if not terminated and not truncated else None
+        except:
+            return None
 
     def start(self):
         """启动服务器"""
@@ -227,8 +249,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='武汉麻将WebSocket服务器')
     parser.add_argument('--port', type=int, default=8011, help='服务器端口')
     parser.add_argument('--human', type=int, default=1, help='人类玩家数量（0-4）')
+    parser.add_argument('--ai-delay', type=float, default=0.5, help='AI思考延迟时间（秒）')
 
     args = parser.parse_args()
 
-    runner = SimpleGameRunner(port=args.port, human_players=args.human)
+    runner = SimpleGameRunner(port=args.port, human_players=args.human, ai_delay=args.ai_delay)
     runner.start()
