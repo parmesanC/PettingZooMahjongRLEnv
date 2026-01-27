@@ -1148,8 +1148,7 @@ export default class MahjongScene extends Phaser.Scene {
                 break;
 
             case 'game_over':
-                // TODO: 显示游戏结束UI
-                console.log('游戏结束:', message);
+                this.showGameOverScreen(message.winner_ids || []);
                 break;
 
             default:
@@ -1180,5 +1179,68 @@ export default class MahjongScene extends Phaser.Scene {
 
         this.gameState = { ...this.gameState, ...newState };
         this.render();
+    }
+
+    /**
+     * 显示游戏结束界面
+     */
+    showGameOverScreen(winnerIds) {
+        const scale = window.GLOBAL_SCALE_RATE;
+        const centerX = this.cameras.main.width / 2;
+        const centerY = this.cameras.main.height / 2;
+
+        // 半透明遮罩
+        const overlay = this.add.graphics();
+        overlay.fillStyle(0x000000, 0.7);
+        overlay.fillRect(0, 0, this.cameras.main.width, this.cameras.main.height);
+        overlay.setDepth(2000);
+
+        // 结果文本
+        const resultText = winnerIds.length > 0
+            ? `玩家 ${winnerIds.join(', ')} 获胜!`
+            : '流局';
+
+        const text = this.add.text(centerX, centerY, resultText, {
+            fontFamily: 'Microsoft YaHei',
+            fontSize: 48 * scale + 'px',
+            color: '#FFD700',
+            fontStyle: 'bold',
+            backgroundColor: '#000000',
+            padding: { x: 30 * scale, y: 20 * scale }
+        }).setOrigin(0.5).setDepth(2001);
+
+        // 重启按钮
+        const restartBtn = this.add.text(centerX, centerY + 100 * scale, '再来一局', {
+            fontFamily: 'Microsoft YaHei',
+            fontSize: 28 * scale + 'px',
+            color: '#ffffff',
+            backgroundColor: '#4CAF50',
+            padding: { x: 20 * scale, y: 15 * scale }
+        }).setOrigin(0.5).setDepth(2001).setInteractive();
+
+        restartBtn.on('pointerdown', () => {
+            this.requestRestart();
+        });
+
+        // 保存引用以便清理
+        this.gameOverUI = { overlay, text, restartBtn };
+    }
+
+    /**
+     * 请求重新开始
+     */
+    requestRestart() {
+        // 清理游戏结束UI
+        if (this.gameOverUI) {
+            this.gameOverUI.overlay.destroy();
+            this.gameOverUI.text.destroy();
+            this.gameOverUI.restartBtn.destroy();
+            this.gameOverUI = null;
+        }
+
+        // 发送重启请求（通过WebSocket）
+        if (this.wsManager) {
+            this.wsManager.sendAction(-1, 0);  // 使用-1表示重启
+        }
     }
 }
