@@ -75,14 +75,45 @@ class WebSocketManager:
     
     def broadcast_sync(self, message: dict):
         """同步广播（从非异步上下文调用）"""
-        import threading
         import asyncio
-        
-        def run_broadcast():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(self.broadcast(message))
-            loop.close()
-        
-        thread = threading.Thread(target=run_broadcast, daemon=True)
-        thread.start()
+
+        try:
+            # 尝试获取当前运行的事件循环
+            loop = asyncio.get_running_loop()
+            # 如果已有事件循环在运行，创建任务
+            asyncio.create_task(self._broadcast_safe(message))
+        except RuntimeError:
+            # 没有运行中的事件循环，创建新线程
+            import threading
+
+            def run_broadcast():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(self.broadcast(message))
+                finally:
+                    loop.close()
+
+            thread = threading.Thread(target=run_broadcast, daemon=True)
+            thread.start()
+
+    async def _broadcast_safe(self, message: dict):
+        """安全广播，处理连接异常"""
+        message_json = json.dumps(message, ensure_ascii=False, cls=NumpyJSONEncoder)
+
+        # 移除已关闭的连接
+        to_remove = []
+        for connection in self.active_connections:
+            try:
+                if connection.client_state.value != 1:  # WebSocketState.CONNECTED = 1
+                    to_remove.append(connection)
+                    continue
+                await connection.send_text(message_json)
+            except Exception as e:
+                print(f"发送消息失败，移除连接: {e}")
+                to_remove.append(connection)
+
+        # 清理无效连接
+        for conn in to_remove:
+            if conn in self.active_connections:
+                self.active_connections.remove(conn)
