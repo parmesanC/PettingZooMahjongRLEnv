@@ -5,6 +5,7 @@
 
 import { TILE_SIZES, COLORS, GAME_STATES } from '../utils/Constants.js';
 import { getTileFrameIndex, getRelativePosition, isLazyTile, isSkinTile, isRedDragon } from '../utils/TileUtils.js';
+import { WebSocketManager } from '../utils/WebSocketManager.js';
 
 export default class MahjongScene extends Phaser.Scene {
     constructor() {
@@ -39,6 +40,10 @@ export default class MahjongScene extends Phaser.Scene {
 
         // 加载进度
         this.loadProgress = 0;
+
+        // WebSocket管理器
+        this.wsManager = null;
+        this.playerId = 0;  // 默认为玩家0
     }
 
     /**
@@ -125,6 +130,9 @@ export default class MahjongScene extends Phaser.Scene {
 
         // 初始化测试数据（后续替换为真实数据）
         this.initTestData();
+
+        // 初始化WebSocket连接
+        this.initWebSocket();
 
         // 渲染初始状态
         this.render();
@@ -815,21 +823,24 @@ export default class MahjongScene extends Phaser.Scene {
      * 打牌后更新游戏状态
      */
     updateAfterDiscard(tileId, index, sortedTiles) {
-        const player = this.gameState.players[0];
+        // 通过WebSocket发送打牌动作
+        if (this.wsManager) {
+            // ActionType.DISCARD = 0
+            this.wsManager.sendAction(0, tileId);
+        }
 
-        // 从手牌中移除
+        // 本地临时更新（等待服务器确认后会覆盖）
+        const player = this.gameState.players[0];
         const originalIndex = player.hand_tiles.indexOf(tileId);
         if (originalIndex > -1) {
             player.hand_tiles.splice(originalIndex, 1);
         }
-
-        // 添加到弃牌河
         player.discard_tiles.push(tileId);
 
         // 重新渲染
         this.render();
 
-        console.log(`Discarded tile ${tileId}. Remaining hand:`, player.hand_tiles);
+        console.log(`Discarded tile ${tileId}. Waiting for server confirmation...`);
     }
 
     /**
@@ -1026,9 +1037,69 @@ export default class MahjongScene extends Phaser.Scene {
     }
 
     /**
+     * 初始化WebSocket连接
+     */
+    initWebSocket() {
+        const wsUrl = `ws://${window.location.hostname}:8011/ws`;
+
+        this.wsManager = new WebSocketManager(wsUrl, (message) => {
+            this.handleWebSocketMessage(message);
+        });
+
+        this.wsManager.connect(this.playerId);
+    }
+
+    /**
+     * 处理WebSocket消息
+     */
+    handleWebSocketMessage(message) {
+        switch (message.type) {
+            case 'game_state':
+                this.updateState(message.state);
+                break;
+
+            case 'initial_state':
+                if (message.state) {
+                    this.updateState(message.state);
+                }
+                break;
+
+            case 'action_prompt':
+                // TODO: 显示动作提示UI
+                console.log('动作提示:', message);
+                break;
+
+            case 'game_over':
+                // TODO: 显示游戏结束UI
+                console.log('游戏结束:', message);
+                break;
+
+            default:
+                console.log('未知消息类型:', message.type);
+        }
+    }
+
+    /**
      * 更新游戏状态
      */
     updateState(newState) {
+        // 兼容后端返回的状态格式
+        if (newState.current_state !== undefined) {
+            // 后端状态：将数字转换为字符串
+            const stateNames = {
+                0: 'INITIAL',
+                1: 'DRAWING',
+                2: 'PLAYER_DECISION',
+                3: 'DISCARDING',
+                4: 'WAITING_RESPONSE',
+                5: 'GONG',
+                6: 'WIN',
+                7: 'FLOW_DRAW'
+            };
+
+            newState.current_state = stateNames[newState.current_state] || 'INITIAL';
+        }
+
         this.gameState = { ...this.gameState, ...newState };
         this.render();
     }
