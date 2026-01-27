@@ -45,10 +45,17 @@ class StateSerializer:
         # 判断是否是观察者自己（决定是否显示手牌）
         is_self = player.player_id == observer_idx
 
+        # 对手的手牌返回虚拟数组（用于显示牌背）
+        if is_self:
+            hand_tiles = [int(t) for t in player.hand_tiles]
+        else:
+            # 使用0作为虚拟牌ID，前端渲染时会显示为牌背
+            hand_tiles = [0] * len(player.hand_tiles)
+
         return {
             'player_id': int(player.player_id),
-            'hand_tiles': [int(t) for t in player.hand_tiles] if is_self else [],
-            'hand_count': len(player.hand_tiles),  # 对手只显示数量
+            'hand_tiles': hand_tiles,
+            'hand_count': len(player.hand_tiles),
             'melds': [
                 {
                     'action_type': m.action_type.action_type.value,

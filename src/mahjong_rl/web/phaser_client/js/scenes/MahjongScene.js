@@ -425,8 +425,8 @@ export default class MahjongScene extends Phaser.Scene {
                 .setScale(tileScale)
                 .setDepth(1000);
 
-            // 添加特殊牌效果
-            this.addSpecialTileEffects(tile, tileId, x, y, tileScale);
+            // 添加特殊牌效果（tiles4: 117x177）
+            this.addSpecialTileEffects(tile, tileId, x, y, tileScale, 117, 177);
 
             // 添加交互（带打牌动画）
             this.setHandTileInteractivity(tile, i, tileId, sortedTiles);
@@ -548,7 +548,8 @@ export default class MahjongScene extends Phaser.Scene {
                 .setScale(tileScale)
                 .setDepth(500);
 
-            this.addSpecialTileEffects(tile, tileId, x, y, tileScale);
+            // tiles0: 72x109
+            this.addSpecialTileEffects(tile, tileId, x, y, tileScale, 72, 109, 0);
             this.riverGroups[0].add(tile);
         }
     }
@@ -580,7 +581,8 @@ export default class MahjongScene extends Phaser.Scene {
                 .setDepth(500)
                 .setRotation(Math.PI / 2);
 
-            this.addSpecialTileEffects(tile, tileId, x, y, tileScale);
+            // tiles1: 97x89, 旋转90度
+            this.addSpecialTileEffects(tile, tileId, x, y, tileScale, 97, 89, Math.PI / 2);
             this.riverGroups[1].add(tile);
         }
     }
@@ -611,7 +613,8 @@ export default class MahjongScene extends Phaser.Scene {
                 .setScale(tileScale)
                 .setDepth(500);
 
-            this.addSpecialTileEffects(tile, tileId, x, y, tileScale);
+            // tiles0: 72x109
+            this.addSpecialTileEffects(tile, tileId, x, y, tileScale, 72, 109, 0);
             this.riverGroups[2].add(tile);
         }
     }
@@ -643,7 +646,8 @@ export default class MahjongScene extends Phaser.Scene {
                 .setDepth(500)
                 .setRotation(Math.PI / 2);
 
-            this.addSpecialTileEffects(tile, tileId, x, y, tileScale);
+            // tiles1: 97x89, 旋转90度
+            this.addSpecialTileEffects(tile, tileId, x, y, tileScale, 97, 89, Math.PI / 2);
             this.riverGroups[3].add(tile);
         }
     }
@@ -697,7 +701,8 @@ export default class MahjongScene extends Phaser.Scene {
                     .setScale(tileScale)
                     .setDepth(800);
 
-                this.addSpecialTileEffects(tile, tileId, tileX, startY, tileScale);
+                // tiles4: 117x177
+                this.addSpecialTileEffects(tile, tileId, tileX, startY, tileScale, 117, 177, 0);
                 this.meldGroups[0].add(tile);
             }
         }
@@ -729,7 +734,8 @@ export default class MahjongScene extends Phaser.Scene {
                     .setDepth(800)
                     .setRotation(Math.PI / 2);
 
-                this.addSpecialTileEffects(tile, tileId, startX, tileY, tileScale);
+                // tiles1: 97x89, 旋转90度
+                this.addSpecialTileEffects(tile, tileId, startX, tileY, tileScale, 97, 89, Math.PI / 2);
                 this.meldGroups[1].add(tile);
             }
         }
@@ -760,7 +766,8 @@ export default class MahjongScene extends Phaser.Scene {
                     .setScale(tileScale)
                     .setDepth(800);
 
-                this.addSpecialTileEffects(tile, tileId, tileX, startY, tileScale);
+                // tiles0: 72x109
+                this.addSpecialTileEffects(tile, tileId, tileX, startY, tileScale, 72, 109, 0);
                 this.meldGroups[2].add(tile);
             }
         }
@@ -792,7 +799,8 @@ export default class MahjongScene extends Phaser.Scene {
                     .setDepth(800)
                     .setRotation(Math.PI / 2);
 
-                this.addSpecialTileEffects(tile, tileId, startX, tileY, tileScale);
+                // tiles1: 97x89, 旋转90度
+                this.addSpecialTileEffects(tile, tileId, startX, tileY, tileScale, 97, 89, Math.PI / 2);
                 this.meldGroups[3].add(tile);
             }
         }
@@ -800,17 +808,52 @@ export default class MahjongScene extends Phaser.Scene {
 
     /**
      * 添加特殊牌视觉效果
+     * @param {Phaser.GameObjects.Image} tile - 牌对象
+     * @param {number} tileId - 牌ID
+     * @param {number} x - x坐标
+     * @param {number} y - y坐标
+     * @param {number} tileScale - 缩放比例
+     * @param {number} tileWidth - 原始牌宽
+     * @param {number} tileHeight - 原始牌高
+     * @param {number} rotation - 旋转角度（弧度）
      */
-    addSpecialTileEffects(tile, tileId, x, y, scale) {
+    addSpecialTileEffects(tile, tileId, x, y, tileScale, tileWidth = 117, tileHeight = 177, rotation = 0) {
         const { lazy_tile, skin_tiles } = this.gameState;
+
+        // 计算实际牌的大小
+        const actualWidth = tileWidth * tileScale;
+        const actualHeight = tileHeight * tileScale;
 
         // 赖子效果 - 金色边框
         if (lazy_tile !== null && isLazyTile(tileId, lazy_tile)) {
             const graphics = this.add.graphics();
             graphics.lineStyle(3, COLORS.LAZY_BORDER, 1);
-            const width = 117 * scale;
-            const height = 177 * scale;
-            graphics.strokeRect(x - width / 2, y - height / 2, width, height);
+
+            if (rotation !== 0) {
+                // 手动计算旋转后的矩形顶点
+                const cos = Math.cos(rotation);
+                const sin = Math.sin(rotation);
+                const hw = actualWidth / 2;
+                const hh = actualHeight / 2;
+
+                // 矩形的四个角（相对于中心）
+                const corners = [
+                    { x: -hw, y: -hh },
+                    { x: hw, y: -hh },
+                    { x: hw, y: hh },
+                    { x: -hw, y: hh }
+                ];
+
+                // 旋转并平移到实际位置
+                const rotatedCorners = corners.map(p => ({
+                    x: x + (p.x * cos - p.y * sin),
+                    y: y + (p.x * sin + p.y * cos)
+                }));
+
+                graphics.strokePoints(rotatedCorners, true);
+            } else {
+                graphics.strokeRect(x - actualWidth / 2, y - actualHeight / 2, actualWidth, actualHeight);
+            }
             graphics.setDepth(1001);
             this.layers.effects.add(graphics);
         }
@@ -819,9 +862,29 @@ export default class MahjongScene extends Phaser.Scene {
         if (skin_tiles.length > 0 && isSkinTile(tileId, skin_tiles)) {
             const graphics = this.add.graphics();
             graphics.lineStyle(2, COLORS.SKIN_BORDER, 1);
-            const width = 117 * scale;
-            const height = 177 * scale;
-            graphics.strokeRect(x - width / 2 - 2, y - height / 2 - 2, width + 4, height + 4);
+
+            if (rotation !== 0) {
+                const cos = Math.cos(rotation);
+                const sin = Math.sin(rotation);
+                const hw = actualWidth / 2 + 2;
+                const hh = actualHeight / 2 + 2;
+
+                const corners = [
+                    { x: -hw, y: -hh },
+                    { x: hw, y: -hh },
+                    { x: hw, y: hh },
+                    { x: -hw, y: hh }
+                ];
+
+                const rotatedCorners = corners.map(p => ({
+                    x: x + (p.x * cos - p.y * sin),
+                    y: y + (p.x * sin + p.y * cos)
+                }));
+
+                graphics.strokePoints(rotatedCorners, true);
+            } else {
+                graphics.strokeRect(x - actualWidth / 2 - 2, y - actualHeight / 2 - 2, actualWidth + 4, actualHeight + 4);
+            }
             graphics.setDepth(1001);
             this.layers.effects.add(graphics);
         }
