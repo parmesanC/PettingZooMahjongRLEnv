@@ -209,7 +209,7 @@ export default class MahjongScene extends Phaser.Scene {
             },
             {
                 player_id: 1,
-                hand_tiles: [],
+                hand_tiles: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  // 13张背面牌
                 melds: [],
                 discard_tiles: [16, 17],
                 special_gangs: [0, 0, 0],
@@ -218,7 +218,7 @@ export default class MahjongScene extends Phaser.Scene {
             },
             {
                 player_id: 2,
-                hand_tiles: [],
+                hand_tiles: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  // 13张背面牌
                 melds: [],
                 discard_tiles: [18, 19, 20],
                 special_gangs: [0, 0, 0],
@@ -227,7 +227,7 @@ export default class MahjongScene extends Phaser.Scene {
             },
             {
                 player_id: 3,
-                hand_tiles: [],
+                hand_tiles: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  // 13张背面牌
                 melds: [],
                 discard_tiles: [21, 22],
                 special_gangs: [0, 0, 0],
