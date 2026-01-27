@@ -201,7 +201,11 @@ export default class MahjongScene extends Phaser.Scene {
             {
                 player_id: 0,
                 hand_tiles: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-                melds: [],
+                // 测试副露：碰（3张相同）、吃（顺子）、杠（4张相同）
+                melds: [
+                    { action_type: 2, tiles: [0, 0, 0], from_player: 1 },  // 碰：1万 x3
+                    { action_type: 1, tiles: [9, 10, 11], from_player: 2 }  // 吃：1条2条3条
+                ],
                 discard_tiles: [13, 14, 15],
                 special_gangs: [0, 0, 0],
                 is_dealer: true,
@@ -209,8 +213,10 @@ export default class MahjongScene extends Phaser.Scene {
             },
             {
                 player_id: 1,
-                hand_tiles: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  // 13张背面牌
-                melds: [],
+                hand_tiles: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  // 10张背面牌（副露后少了）
+                melds: [
+                    { action_type: 3, tiles: [5, 5, 5, 5], from_player: 0 }  // 明杠：6万 x4
+                ],
                 discard_tiles: [16, 17],
                 special_gangs: [0, 0, 0],
                 is_dealer: false,
@@ -218,8 +224,11 @@ export default class MahjongScene extends Phaser.Scene {
             },
             {
                 player_id: 2,
-                hand_tiles: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  // 13张背面牌
-                melds: [],
+                hand_tiles: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  // 10张背面牌
+                melds: [
+                    { action_type: 2, tiles: [1, 1, 1], from_player: 3 },  // 碰：2万 x3
+                    { action_type: 1, tiles: [18, 19, 20], from_player: 0 }  // 吃：1筒2筒3筒
+                ],
                 discard_tiles: [18, 19, 20],
                 special_gangs: [0, 0, 0],
                 is_dealer: false,
@@ -227,7 +236,7 @@ export default class MahjongScene extends Phaser.Scene {
             },
             {
                 player_id: 3,
-                hand_tiles: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  // 13张背面牌
+                hand_tiles: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  // 10张背面牌
                 melds: [],
                 discard_tiles: [21, 22],
                 special_gangs: [0, 0, 0],
@@ -561,8 +570,150 @@ export default class MahjongScene extends Phaser.Scene {
      * 渲染副露区
      */
     renderMelds(playerId, melds, relativePos) {
-        // TODO: 后续实现
-        // 副露区显示吃、碰、杠等亮明的牌组
+        if (!melds || melds.length === 0) return;
+
+        const scale = window.GLOBAL_SCALE_RATE;
+
+        switch (relativePos) {
+            case 0:  // 自己的副露区 - 左侧
+                this.renderSelfMelds(melds, scale);
+                break;
+            case 1:  // 下家的副露区 - 下侧
+                this.renderRightMelds(melds, scale);
+                break;
+            case 2:  // 对家的副露区 - 右侧
+                this.renderOppoMelds(melds, scale);
+                break;
+            case 3:  // 上家的副露区 - 上侧
+                this.renderLeftMelds(melds, scale);
+                break;
+        }
+    }
+
+    /**
+     * 渲染自己的副露区
+     */
+    renderSelfMelds(melds, scale) {
+        const tileScale = scale * 0.4;
+        const startX = 100 * scale;
+        const startY = this.cameras.main.height - 140 * scale;
+        const tileWidth = 117 * tileScale;
+        const tileHeight = 177 * tileScale;
+        const meldGap = 20 * scale;
+        const tileGap = 5 * scale;
+
+        for (let m = 0; m < melds.length; m++) {
+            const meld = melds[m];
+            const meldX = startX + m * (tileWidth * 3 + tileGap * 2 + meldGap);
+
+            for (let i = 0; i < meld.tiles.length; i++) {
+                const tileId = meld.tiles[i];
+                const frameIndex = getTileFrameIndex(tileId);
+                const tileX = meldX + i * (tileWidth + tileGap);
+
+                const tile = this.add.image(tileX, startY, 'tiles4', frameIndex)
+                    .setScale(tileScale)
+                    .setDepth(800);
+
+                this.addSpecialTileEffects(tile, tileId, tileX, startY, tileScale);
+                this.meldGroups[0].add(tile);
+            }
+        }
+    }
+
+    /**
+     * 渲染右侧副露区
+     */
+    renderRightMelds(melds, scale) {
+        const tileScale = scale * 0.35;
+        const startX = this.cameras.main.width - 60 * scale;
+        const startY = this.cameras.main.height - 350 * scale;
+        const tileWidth = 97 * tileScale;
+        const tileHeight = 89 * tileScale;
+        const meldGap = 10 * scale;
+        const tileGap = 2 * scale;
+
+        for (let m = 0; m < melds.length; m++) {
+            const meld = melds[m];
+            const meldY = startY + m * (tileHeight * 3 + tileGap * 2 + meldGap);
+
+            for (let i = 0; i < meld.tiles.length; i++) {
+                const tileId = meld.tiles[i];
+                const frameIndex = getTileFrameIndex(tileId);
+                const tileY = meldY + i * (tileHeight + tileGap);
+
+                const tile = this.add.image(startX, tileY, 'tiles1', frameIndex)
+                    .setScale(tileScale)
+                    .setDepth(800)
+                    .setRotation(Math.PI / 2);
+
+                this.addSpecialTileEffects(tile, tileId, startX, tileY, tileScale);
+                this.meldGroups[1].add(tile);
+            }
+        }
+    }
+
+    /**
+     * 渲染对家副露区
+     */
+    renderOppoMelds(melds, scale) {
+        const tileScale = scale * 0.35;
+        const startX = this.cameras.main.width - 350 * scale;
+        const startY = 130 * scale;
+        const tileWidth = 72 * tileScale;
+        const tileHeight = 109 * tileScale;
+        const meldGap = 15 * scale;
+        const tileGap = 3 * scale;
+
+        for (let m = melds.length - 1; m >= 0; m--) {
+            const meld = melds[m];
+            const meldX = startX - (melds.length - 1 - m) * (tileWidth * 3 + tileGap * 2 + meldGap);
+
+            for (let i = 0; i < meld.tiles.length; i++) {
+                const tileId = meld.tiles[i];
+                const frameIndex = getTileFrameIndex(tileId);
+                const tileX = meldX - i * (tileWidth + tileGap);
+
+                const tile = this.add.image(tileX, startY, 'tiles0', frameIndex)
+                    .setScale(tileScale)
+                    .setDepth(800);
+
+                this.addSpecialTileEffects(tile, tileId, tileX, startY, tileScale);
+                this.meldGroups[2].add(tile);
+            }
+        }
+    }
+
+    /**
+     * 渲染左侧副露区
+     */
+    renderLeftMelds(melds, scale) {
+        const tileScale = scale * 0.35;
+        const startX = 60 * scale;
+        const startY = 350 * scale;
+        const tileWidth = 97 * tileScale;
+        const tileHeight = 89 * tileScale;
+        const meldGap = 10 * scale;
+        const tileGap = 2 * scale;
+
+        for (let m = melds.length - 1; m >= 0; m--) {
+            const meld = melds[m];
+            const meldY = startY + (melds.length - 1 - m) * (tileHeight * 3 + tileGap * 2 + meldGap);
+
+            for (let i = 0; i < meld.tiles.length; i++) {
+                const tileId = meld.tiles[i];
+                const frameIndex = getTileFrameIndex(tileId);
+                const tileY = meldY + i * (tileHeight + tileGap);
+
+                const tile = this.add.image(startX, tileY, 'tiles1', frameIndex)
+                    .setScale(tileScale)
+                    .setDepth(800)
+                    .setRotation(Math.PI / 2);
+
+                this.addSpecialTileEffects(tile, tileId, startX, tileY, tileScale);
+                this.meldGroups[3].add(tile);
+            }
+        }
     }
 
     /**
