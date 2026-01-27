@@ -1040,7 +1040,8 @@ export default class MahjongScene extends Phaser.Scene {
      * 初始化WebSocket连接
      */
     initWebSocket() {
-        const wsUrl = `ws://${window.location.hostname}:8011/ws`;
+        // 使用localhost以便本地测试
+        const wsUrl = `ws://localhost:8011/ws`;
 
         this.wsManager = new WebSocketManager(wsUrl, (message) => {
             this.handleWebSocketMessage(message);
