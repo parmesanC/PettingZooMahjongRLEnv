@@ -1,248 +1,141 @@
 """
 简单的游戏运行器
-用于启动FastAPI服务器并运行游戏循环
-支持人类玩家和AI玩家混合
+继承 ManualController 基类，复用标准游戏循环逻辑
 """
 import sys
 import time
-import asyncio
 from pathlib import Path
 
 # 添加项目根目录到路径
 project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
+from src.mahjong_rl.manual_control.base import ManualController
 from src.mahjong_rl.web.fastapi_server import MahjongFastAPIServer
-from example_mahjong_env import WuhanMahjongEnv
-from src.mahjong_rl.agents.ai.random_strategy import RandomStrategy
+from src.mahjong_rl.web.utils.action_validator import ActionValidator
 
 
-class SimpleGameRunner:
-    """简单的游戏运行器，支持AI玩家"""
+class SimpleGameRunner(ManualController):
+    """
+    简单的游戏运行器，继承 ManualController
 
-    def __init__(self, port=8011, human_players=1, ai_delay=0.5):
+    复用基类的标准游戏循环：
+    - 自动处理 AI 玩家
+    - 自动状态推进
+    - 人类玩家通过 WebSocket 交互
+    """
+
+    def __init__(self, env, port=8011, max_episodes=1000, strategies=None, ai_delay=0.5):
         """
         初始化游戏运行器
 
         Args:
-            port: WebSocket服务器端口
-            human_players: 人类玩家数量（0-4），其余为AI
-            ai_delay: AI思考延迟时间（秒），用于观察游戏过程
+            env: PettingZoo 环境实例
+            port: WebSocket 服务器端口
+            max_episodes: 最大回合数
+            strategies: 玩家策略列表
+            ai_delay: AI 思考延迟时间（秒）
         """
+        super().__init__(env, max_episodes, strategies)
         self.port = port
-        self.human_players = human_players
         self.ai_delay = ai_delay
-        self.env = None
         self.server = None
-        self.current_context = None
-        self.strategies = []
-        self.ai_enabled = human_players < 4
-        self.current_action_masks = [None] * 4  # 存储每个玩家的动作掩码
+        self.pending_action = None
+        self.action_received = False
+        self.action_validator = ActionValidator()
 
-    def setup(self):
-        """设置环境和服务器"""
-        print("初始化武汉麻将环境...")
-
-        # 创建环境
-        self.env = WuhanMahjongEnv(
-            render_mode=None,
-            training_phase=3,  # 完全信息
-            enable_logging=False
+    def run(self):
+        """
+        启动服务器并运行游戏循环
+        """
+        # 创建 FastAPI 服务器
+        self.server = MahjongFastAPIServer(
+            env=self.env,
+            controller=self,
+            port=self.port
         )
 
-        # 重置环境获取初始状态
-        obs, info = self.env.reset()
-        self.current_context = self.env.unwrapped.context
+        # 发送初始状态
+        self.render_env()
 
-        # 创建AI策略
-        if self.ai_enabled:
-            for i in range(4):
-                if i >= self.human_players:
-                    self.strategies.append(RandomStrategy())
-                    print(f"  - 玩家{i}: AI (随机策略)")
-                else:
-                    self.strategies.append(None)
-                    print(f"  - 玩家{i}: 人类")
-        else:
-            self.strategies = [None] * 4
+        # 启动服务器（阻塞）
+        self.server.start()
 
-        print(f"✓ 环境初始化完成")
-        print(f"  - 当前玩家: {self.current_context.current_player_idx}")
-        print(f"  - agent_selection: {self.env.agent_selection}")
-        print(f"  - 赖子: {self.current_context.lazy_tile}")
-        print(f"  - 皮子: {self.current_context.skin_tile}")
-
-    def on_action_received(self, action, player_id=None):
+    def render_env(self):
         """
-        处理接收到的动作
-
-        Args:
-            action: (action_type, parameter) 元组
-            player_id: 发送动作的玩家ID
+        渲染环境状态到前端
         """
-        action_type, parameter = action
+        if self.server and self.env.unwrapped.context:
+            context = self.env.unwrapped.context
 
-        # 处理重启请求 (action_type = -1)
-        if action_type == -1:
-            print(f"\n{'='*60}")
-            print("收到重启请求，开始新的一局...")
-            print(f"{'='*60}")
-            self.restart_game()
-            return
-
-        # 使用 context 的 current_player_idx 进行验证
-        current_player_idx = self.current_context.current_player_idx
-
-        if player_id is not None and player_id != current_player_idx:
-            print(f"警告: 玩家{player_id}尝试在玩家{current_player_idx}的回合行动")
-            return
-
-        player_source = f"玩家{current_player_idx} ({'人类' if self.strategies[current_player_idx] is None else 'AI'})"
-        print(f"收到动作: type={action_type}, param={parameter}, source={player_source}")
-
-        # 执行动作
-        try:
-            next_obs, reward, terminated, truncated, info = self.env.step(action)
-            self.current_context = self.env.unwrapped.context
-
-            # 发送新状态到前端
-            self.send_state_to_all()
-
-            if terminated or truncated:
-                print(f"\n游戏结束! 终止={terminated}, 截断={truncated}")
-                if self.current_context.winner_ids:
-                    print(f"获胜者: {self.current_context.winner_ids}")
-                return
-
-            # 检查是否需要执行AI动作
-            self._check_and_execute_ai()
-
-        except Exception as e:
-            print(f"执行动作失败: {e}")
-            import traceback
-            traceback.print_exc()
-
-    def restart_game(self):
-        """重启游戏，开始新的一局"""
-        try:
-            # 重置环境
-            print("正在重置环境...")
-            obs, info = self.env.reset()
-            self.current_context = self.env.unwrapped.context
-
-            print(f"✓ 新的一局开始！")
-            print(f"  - 当前玩家: {self.current_context.current_player_idx}")
-            print(f"  - 赖子: {self.current_context.lazy_tile}")
-            print(f"  - 皮子: {self.current_context.skin_tile}")
-
-            # 发送新状态到前端
-            self.send_state_to_all()
-
-            # 如果第一个玩家是AI，立即执行AI动作
-            if self.ai_enabled:
-                self._check_and_execute_ai()
-
-        except Exception as e:
-            print(f"重启游戏失败: {e}")
-            import traceback
-            traceback.print_exc()
-
-    def _check_and_execute_ai(self):
-        """检查当前玩家是否是AI，如果是则执行AI动作"""
-        max_ai_steps = 10  # 防止无限循环
-        steps = 0
-
-        while steps < max_ai_steps:
-            current_player_idx = self.current_context.current_player_idx
-            strategy = self.strategies[current_player_idx]
-
-            # 如果当前是人类玩家或游戏已结束，停止
-            if strategy is None or self.current_context.is_win or self.current_context.is_flush:
-                break
-
-            # 执行AI动作
-            print(f"AI玩家{current_player_idx}思考中...")
-            ai_action = self._execute_ai_action(current_player_idx, strategy)
-
-            if ai_action is None:
-                print(f"AI玩家{current_player_idx}无可用动作")
-                break
-
-            steps += 1
-
-        if steps >= max_ai_steps:
-            print("警告：达到最大AI步数")
-
-    def _execute_ai_action(self, player_idx, strategy):
-        """
-        执行AI动作
-
-        Args:
-            player_idx: 玩家索引
-            strategy: AI策略
-
-        Returns:
-            执行的动作，如果无法执行则返回None
-        """
-        try:
-            # AI思考延迟
-            if self.ai_delay > 0:
-                time.sleep(self.ai_delay)
-
-            # 获取当前玩家的观测
-            current_agent = self.env.possible_agents[player_idx]
-            obs, reward, terminated, truncated, info = self.env.last()
-
-            if terminated or truncated:
-                return None
-
-            # AI选择动作
-            action_mask = obs['action_mask']
-            action = strategy.choose_action(obs, action_mask)
-
-            if action is None:
-                return None
-
-            action_type, parameter = action
-            print(f"  AI动作: type={action_type}, param={parameter}")
-
-            # 执行动作
-            next_obs, reward, terminated, truncated, info = self.env.step(action)
-            self.current_context = self.env.unwrapped.context
-
-            # 发送新状态到前端
-            self.send_state_to_all()
-
-            if terminated or truncated:
-                print(f"\n游戏结束! 终止={terminated}, 截断={truncated}")
-                if self.current_context.winner_ids:
-                    print(f"获胜者: {self.current_context.winner_ids}")
-                return None
-
-            return action
-
-        except Exception as e:
-            print(f"AI动作执行失败: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
-
-    def get_current_context(self):
-        """获取当前游戏上下文"""
-        return self.current_context
-
-    def send_state_to_all(self):
-        """发送状态给所有连接的客户端"""
-        if self.server and self.current_context:
             # 给每个玩家发送对应视角的状态
             for player_idx in range(4):
                 # 获取当前玩家的 action_mask
                 action_mask = self._get_action_mask(player_idx)
                 self.server.send_json_state(
-                    self.current_context,
+                    context,
                     player_idx,
                     action_mask
                 )
+
+    def get_human_action(self, observation, info):
+        """
+        获取人类玩家动作（通过 WebSocket）
+
+        阻塞等待前端发送动作。
+
+        Returns:
+            (action_type, parameter) 元组
+        """
+        self.action_received = False
+        self.pending_action = None
+
+        # 阻塞等待动作
+        timeout = 300  # 5分钟超时
+        start_time = time.time()
+
+        while not self.action_received:
+            time.sleep(0.1)
+            if time.time() - start_time > timeout:
+                # 超时，返回 PASS
+                return (10, -1)
+
+        action = self.pending_action
+        self.action_received = False
+        self.pending_action = None
+
+        return action
+
+    def render_final_state(self, info):
+        """
+        渲染最终状态
+        """
+        if self.server:
+            # 发送游戏结束消息到前端
+            message = {
+                'type': 'game_over',
+                'info': info
+            }
+            self.server.websocket_manager.broadcast_sync(message)
+
+    def on_action_received(self, action, player_id=None):
+        """
+        前端发送动作的回调（由 WebSocket 调用）
+
+        Args:
+            action: (action_type, parameter) 元组
+            player_id: 发送动作的玩家ID（用于验证）
+        """
+        # 使用 context 的 current_player_idx 进行验证
+        if player_id is not None:
+            current_player_idx = self.env.unwrapped.context.current_player_idx
+            if player_id != current_player_idx:
+                print(f"警告: 玩家{player_id}尝试在玩家{current_player_idx}的回合行动")
+                return
+
+        # 设置动作，解除阻塞
+        self.pending_action = action
+        self.action_received = True
 
     def _get_action_mask(self, player_idx):
         """获取指定玩家的 action_mask"""
@@ -252,29 +145,6 @@ class SimpleGameRunner:
             return obs['action_mask'] if not terminated and not truncated else None
         except:
             return None
-
-    def start(self):
-        """启动服务器"""
-        if not self.env:
-            self.setup()
-
-        # 创建控制器（将自身作为控制器传入）
-        controller = self
-        self.server = MahjongFastAPIServer(
-            env=self.env,
-            controller=controller,
-            port=self.port
-        )
-
-        # 发送初始状态
-        self.send_state_to_all()
-
-        # 如果第一个玩家是AI，立即执行AI动作
-        if self.ai_enabled:
-            self._check_and_execute_ai()
-
-        # 启动服务器
-        self.server.start()
 
 
 if __name__ == "__main__":
@@ -287,5 +157,29 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    runner = SimpleGameRunner(port=args.port, human_players=args.human, ai_delay=args.ai_delay)
-    runner.start()
+    from example_mahjong_env import WuhanMahjongEnv
+    from src.mahjong_rl.agents.ai.random_strategy import RandomStrategy
+
+    # 创建环境
+    env = WuhanMahjongEnv(
+        render_mode=None,
+        training_phase=3,  # 完全信息
+        enable_logging=False
+    )
+
+    # 创建策略
+    strategies = []
+    for i in range(4):
+        if i < args.human:
+            strategies.append(None)  # 人类玩家
+        else:
+            strategies.append(RandomStrategy())
+
+    # 创建并启动游戏运行器
+    runner = SimpleGameRunner(
+        env=env,
+        port=args.port,
+        strategies=strategies,
+        ai_delay=args.ai_delay
+    )
+    runner.run()
