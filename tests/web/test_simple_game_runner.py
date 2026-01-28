@@ -43,7 +43,7 @@ def test_simple_game_runner_initialization():
 
 @patch('src.mahjong_rl.web.simple_game_runner.MahjongFastAPIServer')
 def test_on_action_received_valid_action(MockServer):
-    """测试接收有效动作"""
+    """测试接收有效动作并执行"""
     env = Mock()
     env.unwrapped.context.current_player_idx = 0
     env.possible_agents = ['player_0', 'player_1', 'player_2', 'player_3']
@@ -52,17 +52,20 @@ def test_on_action_received_valid_action(MockServer):
     mock_obs = {'action_mask': np.zeros(145, dtype=np.int8)}
     mock_obs['action_mask'][5] = 1  # 可以打出5号牌
     env.last = Mock(return_value=(mock_obs, 0, False, False, {}))
+    env.step = Mock(return_value=(mock_obs, 0, False, False, {}))
 
     runner = SimpleGameRunner(env, port=8011, strategies=[None, None, None, None])
     runner.server = Mock()
     runner.server.send_json_state = Mock()
     runner._get_action_mask = Mock(return_value=mock_obs['action_mask'])
+    runner.render_env = Mock()
 
     action = (0, 5)  # 打出5号牌
     runner.on_action_received(action, player_id=0)
 
-    assert runner.pending_action == action
-    assert runner.action_received is True
+    # 验证动作被执行
+    assert env.step.called
+    assert runner.render_env.called
 
 
 @patch('src.mahjong_rl.web.simple_game_runner.MahjongFastAPIServer')
@@ -144,3 +147,39 @@ def test_on_action_received_rejects_invalid_action(MockServer):
     # 验证动作没有被接受
     assert runner.pending_action is None
     assert runner.action_received is False
+
+
+@patch('src.mahjong_rl.web.simple_game_runner.MahjongFastAPIServer')
+def test_process_auto_players_executes_all_ai(MockServer):
+    """测试自动处理所有AI玩家"""
+    env = Mock()
+    env.unwrapped.context.current_player_idx = 1
+    env.unwrapped.context.is_win = False
+    env.unwrapped.context.is_flush = False
+    env.agent_selection = 'player_1'
+    env.possible_agents = ['player_0', 'player_1', 'player_2', 'player_3']
+
+    # Mock observations - use numpy array for action_mask
+    mock_obs = {'action_mask': np.ones(145, dtype=np.int8)}
+    env.last = Mock(return_value=(mock_obs, 0, False, False, {}))
+    env.step = Mock(return_value=(mock_obs, 0, False, False, {}))
+
+    # Mock AI strategy
+    ai_strategy = Mock()
+    ai_strategy.choose_action = Mock(return_value=(10, -1))  # PASS
+
+    runner = SimpleGameRunner(
+        env=env,
+        port=8011,
+        strategies=[None, ai_strategy, ai_strategy, None],
+        ai_delay=0
+    )
+    runner.server = Mock()
+    runner.render_env = Mock()
+
+    # 执行自动玩家处理
+    runner._process_auto_players(mock_obs)
+
+    # 验证AI动作被执行
+    assert ai_strategy.choose_action.called
+    assert env.step.called

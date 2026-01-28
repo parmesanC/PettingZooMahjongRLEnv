@@ -129,6 +129,12 @@ class SimpleGameRunner(ManualController):
         """
         前端发送动作的回调（由 WebSocket 调用）
 
+        这是主要的游戏驱动方法：
+        1. 验证动作
+        2. 执行当前玩家动作
+        3. 自动推进AI玩家
+        4. 渲染新状态
+
         Args:
             action: (action_type, parameter) 元组
             player_id: 发送动作的玩家ID（用于验证）
@@ -162,9 +168,25 @@ class SimpleGameRunner(ManualController):
             self._send_error(error_msg)
             return
 
-        # 设置动作，解除阻塞
-        self.pending_action = action
-        self.action_received = True
+        # 执行人类玩家的动作
+        try:
+            obs, reward, terminated, truncated, info = self.env.step(action)
+
+            # 发送新状态到前端
+            self.render_env()
+
+            # 检查游戏是否结束
+            if terminated or truncated:
+                self.render_final_state(info)
+                return
+
+            # 自动处理AI玩家
+            self._process_auto_players(obs)
+
+        except Exception as e:
+            logger.error(f"执行动作失败: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _send_error(self, message: str) -> None:
         """
@@ -238,6 +260,89 @@ class SimpleGameRunner(ManualController):
             return obs['action_mask'] if not terminated and not truncated else None
         except (KeyError, IndexError, AttributeError):
             return None
+
+    def _process_auto_players(self, initial_obs) -> None:
+        """
+        处理 AI 玩家和自动状态推进
+
+        在人类玩家动作后，自动执行所有AI玩家的动作。
+
+        Args:
+            initial_obs: 初始观测（人类玩家动作后的状态）
+        """
+        max_ai_steps = 20  # 防止无限循环
+        steps = 0
+
+        while steps < max_ai_steps:
+            current_agent = self.env.agent_selection
+            current_player_idx = self.env.unwrapped.context.current_player_idx
+
+            # 检查游戏是否结束
+            if self.env.unwrapped.context.is_win or self.env.unwrapped.context.is_flush:
+                break
+
+            # 如果是人类玩家，停止自动推进
+            if self._is_human_player(current_agent):
+                break
+
+            # 获取AI策略
+            strategy = self.strategies[current_player_idx]
+            if strategy is None:
+                break
+
+            # 执行AI动作
+            logger.info(f"AI玩家{current_player_idx}思考中...")
+
+            # 获取当前观测
+            obs, reward, terminated, truncated, info = self.env.last()
+
+            # AI选择动作
+            action_mask = obs['action_mask']
+            action = strategy.choose_action(obs, action_mask)
+
+            if action is None:
+                logger.warning(f"AI玩家{current_player_idx}无可用动作")
+                break
+
+            # 验证AI动作
+            is_valid, error_msg = self.action_validator.validate_action_with_error_message(
+                action[0], action[1], action_mask
+            )
+
+            if not is_valid:
+                logger.warning(f"AI玩家{current_player_idx}选择了非法动作: {error_msg}")
+                # AI使用PASS代替
+                action = (10, -1)
+
+            action_type, parameter = action
+            logger.info(f"  AI动作: type={action_type}, param={parameter}")
+
+            # 执行AI动作
+            try:
+                obs, reward, terminated, truncated, info = self.env.step(action)
+
+                # AI延迟（观察用）
+                if self.ai_delay > 0:
+                    time.sleep(self.ai_delay)
+
+                # 发送状态更新
+                self.render_env()
+
+                # 检查游戏是否结束
+                if terminated or truncated:
+                    self.render_final_state(info)
+                    return
+
+            except Exception as e:
+                logger.error(f"AI动作执行失败: {e}")
+                import traceback
+                traceback.print_exc()
+                break
+
+            steps += 1
+
+        if steps >= max_ai_steps:
+            logger.warning("达到最大AI步数")
 
 
 if __name__ == "__main__":
