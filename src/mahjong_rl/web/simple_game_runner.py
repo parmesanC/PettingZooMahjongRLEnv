@@ -2,9 +2,13 @@
 简单的游戏运行器
 继承 ManualController 基类，复用标准游戏循环逻辑
 """
+import logging
 import sys
 import time
 from pathlib import Path
+from typing import Optional
+
+import numpy as np
 
 # 添加项目根目录到路径
 project_root = Path(__file__).parent.parent.parent.parent
@@ -13,6 +17,8 @@ sys.path.insert(0, str(project_root))
 from src.mahjong_rl.manual_control.base import ManualController
 from src.mahjong_rl.web.fastapi_server import MahjongFastAPIServer
 from src.mahjong_rl.web.utils.action_validator import ActionValidator
+
+logger = logging.getLogger(__name__)
 
 
 class SimpleGameRunner(ManualController):
@@ -24,6 +30,8 @@ class SimpleGameRunner(ManualController):
     - 自动状态推进
     - 人类玩家通过 WebSocket 交互
     """
+
+    ACTION_TIMEOUT_SECONDS = 300
 
     def __init__(self, env, port=8011, max_episodes=1000, strategies=None, ai_delay=0.5):
         """
@@ -91,12 +99,11 @@ class SimpleGameRunner(ManualController):
         self.pending_action = None
 
         # 阻塞等待动作
-        timeout = 300  # 5分钟超时
         start_time = time.time()
 
         while not self.action_received:
             time.sleep(0.1)
-            if time.time() - start_time > timeout:
+            if time.time() - start_time > self.ACTION_TIMEOUT_SECONDS:
                 # 超时，返回 PASS
                 return (10, -1)
 
@@ -118,7 +125,7 @@ class SimpleGameRunner(ManualController):
             }
             self.server.websocket_manager.broadcast_sync(message)
 
-    def on_action_received(self, action, player_id=None):
+    def on_action_received(self, action: tuple, player_id: int = None) -> None:
         """
         前端发送动作的回调（由 WebSocket 调用）
 
@@ -130,20 +137,28 @@ class SimpleGameRunner(ManualController):
         if player_id is not None:
             current_player_idx = self.env.unwrapped.context.current_player_idx
             if player_id != current_player_idx:
-                print(f"警告: 玩家{player_id}尝试在玩家{current_player_idx}的回合行动")
+                logger.warning(f"玩家{player_id}尝试在玩家{current_player_idx}的回合行动")
                 return
 
         # 设置动作，解除阻塞
         self.pending_action = action
         self.action_received = True
 
-    def _get_action_mask(self, player_idx):
-        """获取指定玩家的 action_mask"""
+    def _get_action_mask(self, player_idx: int) -> Optional[np.ndarray]:
+        """
+        获取指定玩家的 action_mask
+
+        Args:
+            player_idx: 玩家索引
+
+        Returns:
+            action_mask 数组，如果游戏已结束则返回 None
+        """
         try:
             current_agent = self.env.possible_agents[player_idx]
             obs, reward, terminated, truncated, info = self.env.last()
             return obs['action_mask'] if not terminated and not truncated else None
-        except:
+        except (KeyError, IndexError, AttributeError):
             return None
 
 
