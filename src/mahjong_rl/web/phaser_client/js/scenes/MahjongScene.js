@@ -1239,6 +1239,16 @@ export default class MahjongScene extends Phaser.Scene {
                 this.showGameOverScreen(message.winner_ids || []);
                 break;
 
+            case 'error':
+                console.error('收到错误:', message.message);
+                this.showErrorNotification(message.message);
+                break;
+
+            case 'info':
+                console.log('收到消息:', message.message);
+                this.showInfoNotification(message.message);
+                break;
+
             default:
                 console.log('未知消息类型:', message.type);
         }
@@ -1367,5 +1377,45 @@ export default class MahjongScene extends Phaser.Scene {
         if (this.wsManager) {
             this.wsManager.sendAction(-1, 0);  // 使用-1表示重启
         }
+    }
+
+    /**
+     * 显示错误通知
+     */
+    showErrorNotification(message) {
+        // 显示错误通知（红色，3秒后消失）
+        const notification = this.add.text(400, 50, message, {
+            fontSize: '24px',
+            fill: '#ff0000',
+            backgroundColor: '#000000',
+            padding: { x: 20, y: 10 }
+        }).setOrigin(0.5);
+
+        this.tweens.add({
+            targets: notification,
+            alpha: 0,
+            duration: 3000,
+            onComplete: () => notification.destroy()
+        });
+    }
+
+    /**
+     * 显示信息通知
+     */
+    showInfoNotification(message) {
+        // 显示信息通知（绿色，2秒后消失）
+        const notification = this.add.text(400, 50, message, {
+            fontSize: '24px',
+            fill: '#00ff00',
+            backgroundColor: '#000000',
+            padding: { x: 20, y: 10 }
+        }).setOrigin(0.5);
+
+        this.tweens.add({
+            targets: notification,
+            alpha: 0,
+            duration: 2000,
+            onComplete: () => notification.destroy()
+        });
     }
 }
