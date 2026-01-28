@@ -114,3 +114,33 @@ def test_get_action_mask_when_terminated():
     action_mask = runner._get_action_mask(0)
 
     assert action_mask is None
+
+
+@patch('src.mahjong_rl.web.simple_game_runner.MahjongFastAPIServer')
+def test_on_action_received_rejects_invalid_action(MockServer):
+    """测试非法动作被拒绝"""
+    env = Mock()
+    env.unwrapped.context.current_player_idx = 0
+    env.possible_agents = ['player_0', 'player_1', 'player_2', 'player_3']
+
+    # 创建全0的action_mask（没有任何动作可用）
+    mock_obs = {'action_mask': np.zeros(145, dtype=np.int8)}
+    env.last = Mock(return_value=(mock_obs, 0, False, False, {}))
+
+    runner = SimpleGameRunner(env, port=8011, strategies=[None, None, None, None])
+    runner.server = Mock()
+    runner.server.websocket_manager = Mock()
+    runner.server.websocket_manager.broadcast_sync = Mock()
+
+    action = (0, 5)  # 尝试打出5号牌，但action_mask全0
+    runner.on_action_received(action, player_id=0)
+
+    # 验证错误消息被发送
+    assert runner.server.websocket_manager.broadcast_sync.called
+    call_args = runner.server.websocket_manager.broadcast_sync.call_args[0][0]
+    assert call_args['type'] == 'error'
+    assert '当前不可用' in call_args['message']
+
+    # 验证动作没有被接受
+    assert runner.pending_action is None
+    assert runner.action_received is False

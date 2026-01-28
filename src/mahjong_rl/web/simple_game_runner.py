@@ -133,16 +133,94 @@ class SimpleGameRunner(ManualController):
             action: (action_type, parameter) 元组
             player_id: 发送动作的玩家ID（用于验证）
         """
+        action_type, parameter = action
+
+        # 处理重启请求 (action_type = -1)
+        if action_type == -1:
+            self._restart_game()
+            return
+
         # 使用 context 的 current_player_idx 进行验证
-        if player_id is not None:
-            current_player_idx = self.env.unwrapped.context.current_player_idx
-            if player_id != current_player_idx:
-                logger.warning(f"玩家{player_id}尝试在玩家{current_player_idx}的回合行动")
-                return
+        current_player_idx = self.env.unwrapped.context.current_player_idx
+
+        if player_id is not None and player_id != current_player_idx:
+            self._send_error(f"不是你的回合，当前是玩家{current_player_idx}")
+            return
+
+        # 获取当前玩家的 action_mask
+        action_mask = self._get_action_mask(current_player_idx)
+        if action_mask is None:
+            self._send_error("游戏已结束")
+            return
+
+        # 验证动作合法性
+        is_valid, error_msg = self.action_validator.validate_action_with_error_message(
+            action_type, parameter, action_mask
+        )
+
+        if not is_valid:
+            self._send_error(error_msg)
+            return
 
         # 设置动作，解除阻塞
         self.pending_action = action
         self.action_received = True
+
+    def _send_error(self, message: str) -> None:
+        """
+        发送错误消息到前端
+
+        Args:
+            message: 错误消息
+        """
+        if self.server and self.server.websocket_manager:
+            error_message = {
+                'type': 'error',
+                'message': message
+            }
+            self.server.websocket_manager.broadcast_sync(error_message)
+
+    def _restart_game(self) -> None:
+        """
+        重启游戏，开始新的一局（保留配置）
+        """
+        try:
+            print("\n" + "=" * 60)
+            print("收到重启请求，开始新的一局...")
+            print("=" * 60)
+
+            # 重置环境
+            self.env.reset()
+
+            print(f"✓ 新的一局开始！")
+            print(f"  - 当前玩家: {self.env.unwrapped.context.current_player_idx}")
+            print(f"  - 赖子: {self.env.unwrapped.context.lazy_tile}")
+            print(f"  - 皮子: {self.env.unwrapped.context.skin_tile}")
+
+            # 发送新状态到前端
+            self.render_env()
+
+            # 发送重启成功消息
+            self._send_message("游戏已重启，配置已保留")
+
+        except Exception as e:
+            print(f"重启游戏失败: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _send_message(self, message: str) -> None:
+        """
+        发送普通消息到前端
+
+        Args:
+            message: 消息内容
+        """
+        if self.server and self.server.websocket_manager:
+            msg = {
+                'type': 'info',
+                'message': message
+            }
+            self.server.websocket_manager.broadcast_sync(msg)
 
     def _get_action_mask(self, player_idx: int) -> Optional[np.ndarray]:
         """
