@@ -56,6 +56,14 @@ class SimpleGameRunner(ManualController):
         """
         启动服务器并运行游戏循环
         """
+        # 重置环境以初始化游戏状态
+        print("正在重置环境...")
+        self.env.reset()
+        print(f"✓ 环境重置成功")
+        print(f"  - 当前玩家: {self.env.unwrapped.context.current_player_idx}")
+        print(f"  - 赖子: {self.env.unwrapped.context.lazy_tile}")
+        print(f"  - 皮子: {self.env.unwrapped.context.skin_tile}")
+
         # 创建 FastAPI 服务器
         self.server = MahjongFastAPIServer(
             env=self.env,
@@ -65,6 +73,12 @@ class SimpleGameRunner(ManualController):
 
         # 发送初始状态
         self.render_env()
+
+        # 如果第一个玩家是AI，立即执行AI动作
+        if self.strategies and self.strategies[0] is not None:
+            import numpy as np
+            mock_obs = {'action_mask': np.ones(145, dtype=np.int8)}
+            self._process_auto_players(mock_obs)
 
         # 启动服务器（阻塞）
         self.server.start()
@@ -260,6 +274,17 @@ class SimpleGameRunner(ManualController):
             return obs['action_mask'] if not terminated and not truncated else None
         except (KeyError, IndexError, AttributeError):
             return None
+
+    def get_current_context(self):
+        """
+        获取当前游戏上下文
+
+        FastAPI 服务器需要此方法在 WebSocket 连接时获取初始状态。
+
+        Returns:
+            GameContext 对象
+        """
+        return self.env.unwrapped.context
 
     def _process_auto_players(self, initial_obs) -> None:
         """
