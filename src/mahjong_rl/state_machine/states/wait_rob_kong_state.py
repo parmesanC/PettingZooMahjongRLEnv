@@ -126,7 +126,29 @@ class WaitRobKongState(GameState):
             # 如果是自动模式，默认PASS
             response_action = MahjongAction(ActionType.PASS, -1)
         else:
+            # ===== 新增：验证动作类型 =====
+            if not isinstance(action, MahjongAction):
+                raise ValueError(
+                    f"WaitRobKongState expects MahjongAction or 'auto', got {type(action).__name__}"
+                )
+
             response_action = action
+
+            # 只允许 WIN 或 PASS 动作
+            if response_action.action_type not in [ActionType.WIN, ActionType.PASS]:
+                raise ValueError(
+                    f"Only WIN or PASS actions allowed in WAIT_ROB_KONG state, "
+                    f"got {response_action.action_type.name}"
+                )
+
+            # ===== 新增：验证抢杠条件（防御性检查）=====
+            if response_action.action_type == ActionType.WIN:
+                if current_responder not in self.rob_kong_players:
+                    raise ValueError(
+                        f"Player {current_responder} cannot rob kong: "
+                        f"not in rob_kong_players list. "
+                        f"Current hand: {context.players[current_responder].hand_tiles}"
+                    )
 
         # 记录响应
         context.rob_kong_responses[current_responder] = response_action
