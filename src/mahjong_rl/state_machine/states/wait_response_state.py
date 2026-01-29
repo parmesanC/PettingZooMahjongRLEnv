@@ -241,29 +241,22 @@ class WaitResponseState(GameState):
         Returns:
             可用动作列表
         """
-        # 这个状态需要为每个响应者单独获取动作
-        # 这里返回当前响应者的可用动作
-        if not hasattr(self, '_current_available_actions'):
-            self._current_available_actions = {}
-
+        # 移除缓存，每次都重新检测（避免弃牌变化导致的缓存错误）
         current_responder = context.active_responders[context.active_responder_idx]
-        if current_responder not in self._current_available_actions:
-            player = context.players[current_responder]
-            discard_tile = context.last_discarded_tile
-            discard_player = context.discard_player
+        player = context.players[current_responder]
+        discard_tile = context.last_discarded_tile
+        discard_player = context.discard_player
 
-            available_actions = self.rule_engine.detect_available_actions_after_discard(
-                player, discard_tile, discard_player
-            )
+        available_actions = self.rule_engine.detect_available_actions_after_discard(
+            player, discard_tile, discard_player
+        )
 
-            # 确保 PASS 在列表中
-            has_pass = any(a.action_type == ActionType.PASS for a in available_actions)
-            if not has_pass:
-                available_actions.append(MahjongAction(ActionType.PASS, -1))
+        # 确保 PASS 在列表中
+        has_pass = any(a.action_type == ActionType.PASS for a in available_actions)
+        if not has_pass:
+            available_actions.append(MahjongAction(ActionType.PASS, -1))
 
-            self._current_available_actions[current_responder] = available_actions
-
-        return self._current_available_actions[current_responder]
+        return available_actions
 
     def _is_action_valid(self, context: GameContext, player_id: int, action: MahjongAction) -> bool:
         """
