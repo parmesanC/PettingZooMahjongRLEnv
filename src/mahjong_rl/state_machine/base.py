@@ -3,6 +3,7 @@ from typing import Dict, Optional, Any, List
 
 from src.mahjong_rl.core.GameData import GameContext
 from src.mahjong_rl.core.constants import GameStateType, ActionType
+from src.mahjong_rl.core.mahjong_action import MahjongAction
 from src.mahjong_rl.observation.builder import IObservationBuilder
 from src.mahjong_rl.rules.base import IRuleEngine
 
@@ -83,3 +84,50 @@ class GameState(ABC):
             False 表示需要等待 agent 输入
         """
         return False
+
+    def validate_action(self, context: GameContext, action: MahjongAction, available_actions: List[MahjongAction]) -> bool:
+        """
+        验证动作是否在可用动作列表中
+
+        这是通用的验证方法，子类可以覆盖以实现自定义验证逻辑。
+
+        Args:
+            context: 游戏上下文
+            action: 要验证的动作
+            available_actions: 可用动作列表（来自ActionValidator）
+
+        Returns:
+            True 如果动作合法，False 如果动作非法
+        """
+        # PASS 总是合法的
+        if action.action_type == ActionType.PASS:
+            return True
+
+        # 检查动作是否在可用动作列表中
+        for valid_action in available_actions:
+            # 对于 PONG, KONG_EXPOSED，parameter 可以不同（由规则引擎决定）
+            if action.action_type in [ActionType.PONG, ActionType.KONG_EXPOSED]:
+                if valid_action.action_type == action.action_type:
+                    return True
+
+            # 对于其他动作，action_type 和 parameter 都必须匹配
+            if (valid_action.action_type == action.action_type and
+                valid_action.parameter == action.parameter):
+                return True
+
+        return False
+
+    def get_available_actions(self, context: GameContext) -> List[MahjongAction]:
+        """
+        获取当前状态下可用的动作列表
+
+        子类应该覆盖此方法以提供特定状态的可用动作检测逻辑。
+
+        Args:
+            context: 游戏上下文
+
+        Returns:
+            可用动作列表
+        """
+        # 默认实现：子类应该覆盖
+        return []
