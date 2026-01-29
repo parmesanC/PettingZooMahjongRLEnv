@@ -1,4 +1,4 @@
-from typing import Dict, Callable, Optional, Union
+from typing import Dict, Callable, Optional, Union, List
 
 import numpy as np
 
@@ -52,27 +52,40 @@ class PlayerDecisionState(GameState):
     def step(self, context: GameContext, action: Union[MahjongAction, str]) -> GameStateType:
         """
         处理玩家决策动作
-        
+
         Args:
             context: 游戏上下文
             action: MahjongAction对象
-        
+
         Returns:
             下一个状态类型
         """
-        # 验证action是MahjongAction对象
+        # 类型验证
         if not isinstance(action, MahjongAction):
             raise ValueError(f"PlayerDecisionState expects MahjongAction, got {type(action)}")
-        
+
         current_player_idx = context.current_player_idx
         current_player_data = context.players[current_player_idx]
 
+        # ===== 新增：动作验证 =====
+        # 获取可用动作列表
+        available_actions = self._get_available_actions(context, current_player_data)
+
+        # 验证动作是否合法
+        if not self.validate_action(context, action, available_actions):
+            # 非法动作：抛出异常，让环境返回负奖励
+            raise ValueError(
+                f"Invalid action {action.action_type.name} (param={action.parameter}) "
+                f"in PLAYER_DECISION state for player {current_player_idx}. "
+                f"Available actions: {[f'{a.action_type.name}({a.parameter})' for a in available_actions[:5]]}..."
+            )
+
+        # ===== 原有逻辑 =====
         # 保存杠牌动作到context（供GongState使用）
         if action.action_type in [ActionType.KONG_SUPPLEMENT, ActionType.KONG_CONCEALED,
                                 ActionType.KONG_RED, ActionType.KONG_SKIN, ActionType.KONG_LAZY]:
             context.last_kong_action = action
 
-        # 解析动作类型
         action_type = action.action_type
 
         # 使用策略模式处理动作
@@ -82,18 +95,26 @@ class PlayerDecisionState(GameState):
     def _handle_discard(self, context: GameContext, action: MahjongAction, current_player_data: PlayerData) -> GameStateType:
         """
         处理打牌动作
-        
+
         记录玩家要打出的牌，实际打牌操作在DISCARDING状态中执行。
-        
+
         Args:
             context: 游戏上下文
             action: 动作
             current_player_data: 玩家数据
-        
+
         Returns:
             DISCARDING状态
         """
         discard_tile = action.parameter
+
+        # ===== 新增：防御性验证 =====
+        if discard_tile not in current_player_data.hand_tiles:
+            raise ValueError(
+                f"Player {current_player_data.player_id} cannot discard tile {discard_tile}: "
+                f"not in hand. Hand: {current_player_data.hand_tiles}"
+            )
+
         # 将待打出的牌存储到context中，供DISCARDING状态使用
         context.pending_discard_tile = discard_tile
         return GameStateType.DISCARDING
@@ -129,7 +150,21 @@ class PlayerDecisionState(GameState):
 
         Returns:
             GONG状态
+
+        Raises:
+            ValueError: 如果玩家没有4张相同的牌
         """
+        kong_tile = action.parameter
+
+        # ===== 新增：验证暗杠条件 =====
+        # 检查手牌中是否有4张相同的牌
+        tile_count = current_player_data.hand_tiles.count(kong_tile)
+        if tile_count < 4:
+            raise ValueError(
+                f"Player {current_player_data.player_id} cannot concealed kong {kong_tile}: "
+                f"only has {tile_count} tiles. Hand: {current_player_data.hand_tiles}"
+            )
+
         # 将杠牌动作保存到context中，供GongState使用
         context.pending_kong_action = action
         return GameStateType.GONG
@@ -191,20 +226,49 @@ class PlayerDecisionState(GameState):
     def _handle_win(self, context: GameContext, action: MahjongAction, current_player_data: PlayerData) -> GameStateType:
         """
         处理和牌动作
-        
+
         Args:
             context: 游戏上下文
             action: 动作
             current_player_data: 玩家数据
-        
+
         Returns:
             WIN状态
+
+        Raises:
+            ValueError: 如果不能胡牌
         """
+        # ===== 新增：验证胡牌条件 =====
+        from src.mahjong_rl.rules.wuhan_mahjong_rule_engine.win_detector import WuhanMahjongWinChecker
+
+        win_checker = WuhanMahjongWinChecker(context)
+
+        # 构建临时手牌（包含刚摸到的牌）
+        temp_hand = current_player_data.hand_tiles.copy()
+        if context.last_drawn_tile is not None:
+            temp_hand.append(context.last_drawn_tile)
+
+        # 创建临时玩家对象
+        temp_player = PlayerData(
+            player_id=current_player_data.player_id,
+            hand_tiles=temp_hand,
+            melds=current_player_data.melds.copy(),
+            special_gangs=current_player_data.special_gangs.copy()
+        )
+
+        # 检查是否真的能胡
+        win_result = win_checker.check_win(temp_player)
+        if not win_result.can_win:
+            raise ValueError(
+                f"Player {current_player_data.player_id} cannot win: "
+                f"hand={temp_hand}, melds={current_player_data.melds}"
+            )
+
         # 设置游戏状态为和牌
         context.is_win = True
         context.winner_ids = [context.current_player_idx]
         context.win_way = WinWay.SELF_DRAW.value
-        
+
         return GameStateType.WIN
     
     def _handle_default(self, context: GameContext, action: MahjongAction, current_player_data: PlayerData) -> GameStateType:
@@ -232,12 +296,31 @@ class PlayerDecisionState(GameState):
     def exit(self, context: GameContext) -> None:
         """
         离开玩家决策状态
-        
+
         Args:
             context: 游戏上下文
         """
         pass
-    
+
+    def _get_available_actions(self, context: GameContext, current_player_data: PlayerData) -> List[MahjongAction]:
+        """
+        获取当前玩家的可用动作列表
+
+        Args:
+            context: 游戏上下文
+            current_player_data: 当前玩家数据
+
+        Returns:
+            可用动作列表
+        """
+        from src.mahjong_rl.rules.wuhan_mahjong_rule_engine.action_validator import ActionValidator
+
+        validator = ActionValidator(context)
+        return validator.detect_available_actions_after_draw(
+            current_player_data,
+            context.last_drawn_tile
+        )
+
     def _generate_action_mask(self, context) -> np.ndarray:
         """
         生成动作掩码
