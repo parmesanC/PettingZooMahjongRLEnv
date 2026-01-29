@@ -12,7 +12,7 @@
 5. 根据最佳响应类型转换状态
 """
 
-from typing import Union
+from typing import Union, List
 
 from src.mahjong_rl.core.GameData import GameContext
 from src.mahjong_rl.core.constants import GameStateType, ActionType, ResponsePriority
@@ -130,8 +130,11 @@ class WaitResponseState(GameState):
         else:
             response_action = action
 
-        # 验证动作有效性
-        if not self._is_action_valid(context, current_responder, response_action):
+        # ===== 使用基类验证方法 =====
+        available_actions = self._get_available_actions(context)
+
+        # 验证动作有效性，无效则转为 PASS
+        if not self.validate_action(context, response_action, available_actions):
             response_action = MahjongAction(ActionType.PASS, -1)
 
         # 添加到响应收集器
@@ -228,42 +231,59 @@ class WaitResponseState(GameState):
             # 不应该到达这里
             raise ValueError(f"Unexpected action type in _select_best_response: {best_response.action_type}")
     
+    def _get_available_actions(self, context: GameContext) -> List[MahjongAction]:
+        """
+        获取当前响应者的可用动作列表
+
+        Args:
+            context: 游戏上下文
+
+        Returns:
+            可用动作列表
+        """
+        # 这个状态需要为每个响应者单独获取动作
+        # 这里返回当前响应者的可用动作
+        if not hasattr(self, '_current_available_actions'):
+            self._current_available_actions = {}
+
+        current_responder = context.active_responders[context.active_responder_idx]
+        if current_responder not in self._current_available_actions:
+            player = context.players[current_responder]
+            discard_tile = context.last_discarded_tile
+            discard_player = context.discard_player
+
+            available_actions = self.rule_engine.detect_available_actions_after_discard(
+                player, discard_tile, discard_player
+            )
+
+            # 确保 PASS 在列表中
+            has_pass = any(a.action_type == ActionType.PASS for a in available_actions)
+            if not has_pass:
+                available_actions.append(MahjongAction(ActionType.PASS, -1))
+
+            self._current_available_actions[current_responder] = available_actions
+
+        return self._current_available_actions[current_responder]
+
     def _is_action_valid(self, context: GameContext, player_id: int, action: MahjongAction) -> bool:
         """
         验证动作是否有效
-        
+
+        @deprecated: Use validate_action() with _get_available_actions() instead
+                     This method is kept for backward compatibility.
+
         检查玩家的动作是否在可用动作列表中。
-        
+
         Args:
             context: 游戏上下文
             player_id: 玩家ID
             action: 动作
-        
+
         Returns:
             True如果动作有效
         """
-        player = context.players[player_id]
-        discard_tile = context.last_discarded_tile
-        discard_player = context.discard_player
-        
-        # 获取该玩家的所有可用动作
-        available_actions = self.rule_engine.detect_available_actions_after_discard(
-            player, discard_tile, discard_player
-        )
-        
-        # PASS总是有效
-        if action.action_type == ActionType.PASS:
-            return True
-        
-        # 检查动作是否在可用动作列表中
-        # PONG, KONG_EXPOSED 的 parameter 可忽略（被自动确定）
-        if action.action_type in [ActionType.PONG, ActionType.KONG_EXPOSED]:
-            return any(a.action_type == action.action_type for a in available_actions)
-
-        return any(
-            a.action_type == action.action_type and a.parameter == action.parameter
-            for a in available_actions
-        )
+        available_actions = self._get_available_actions(context)
+        return self.validate_action(context, action, available_actions)
     
     def _get_action_priority(self, action_type: ActionType) -> ResponsePriority:
         """
