@@ -378,6 +378,23 @@ class WuhanMahjongEnv(AECEnv):
             print(f"无效动作: {e}")
             return self.observe(current_agent), -1.0, False, False, {'error': str(e)}
 
+        # 验证action_mask：确保agent选择的动作在可用动作范围内
+        obs = self.observe(current_agent)
+        action_mask = obs['action_mask']
+
+        if not self._is_action_mask_valid(mahjong_action, action_mask):
+            # 记录警告
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"Agent {current_agent} chose action not in action_mask: "
+                f"{mahjong_action.action_type.name}({mahjong_action.parameter}). "
+                f"Returning negative reward."
+            )
+
+            # 返回负奖励
+            return obs, -1.0, False, False, {'error': 'action not in mask'}
+
         # 执行状态机step
         # 注意：自动跳过逻辑（如所有玩家只能 PASS）已由状态机的 auto-skip pattern 处理
         # 不需要在此处额外检测和转换
@@ -536,7 +553,87 @@ class WuhanMahjongEnv(AECEnv):
             raise ValueError(f"Invalid parameter: {parameter}")
         
         return MahjongAction(ActionType(action_type), parameter)
-    
+
+    def _action_to_index(self, action: MahjongAction) -> int:
+        """
+        将 MahjongAction 转换为 action_mask 的索引
+
+        Args:
+            action: 动作对象
+
+        Returns:
+            action_mask 索引 (0-144)，如果动作类型无效则返回 -1
+        """
+        action_type = action.action_type
+        parameter = action.parameter
+
+        # DISCARD: 0-33
+        if action_type == ActionType.DISCARD:
+            return parameter
+
+        # CHOW: 34-36
+        elif action_type == ActionType.CHOW:
+            return 34 + parameter
+
+        # PONG: 37
+        elif action_type == ActionType.PONG:
+            return 37
+
+        # KONG_EXPOSED: 38
+        elif action_type == ActionType.KONG_EXPOSED:
+            return 38
+
+        # KONG_SUPPLEMENT: 39-72
+        elif action_type == ActionType.KONG_SUPPLEMENT:
+            return 39 + parameter
+
+        # KONG_CONCEALED: 73-106
+        elif action_type == ActionType.KONG_CONCEALED:
+            return 73 + parameter
+
+        # KONG_RED: 107
+        elif action_type == ActionType.KONG_RED:
+            return 107
+
+        # KONG_SKIN: 108-141
+        elif action_type == ActionType.KONG_SKIN:
+            return 108 + parameter
+
+        # KONG_LAZY: 142
+        elif action_type == ActionType.KONG_LAZY:
+            return 142
+
+        # WIN: 143
+        elif action_type == ActionType.WIN:
+            return 143
+
+        # PASS: 144
+        elif action_type == ActionType.PASS:
+            return 144
+
+        else:
+            return -1
+
+    def _is_action_mask_valid(self, action: MahjongAction, action_mask: np.ndarray) -> bool:
+        """
+        检查动作是否在 action_mask 中被标记为可用
+
+        Args:
+            action: 动作对象
+            action_mask: 动作掩码 (145位)
+
+        Returns:
+            True 如果 action_mask 对应位置为1，False 否则
+        """
+        # 将动作转换为 mask 索引
+        action_index = self._action_to_index(action)
+
+        # 检查索引是否在范围内
+        if action_index < 0 or action_index >= len(action_mask):
+            return False
+
+        return action_mask[action_index] == 1
+
     def _apply_visibility_mask(self, observation: Dict[str, np.ndarray], agent_id: int) -> Dict[str, np.ndarray]:
         """
         应用信息可见度掩码
