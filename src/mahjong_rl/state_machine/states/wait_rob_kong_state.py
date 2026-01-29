@@ -109,6 +109,11 @@ class WaitRobKongState(GameState):
         Returns:
             WIN 如果有玩家抢杠和成功
             GONG 如果都PASS（执行补杠）
+
+        Raises:
+            ValueError: 如果动作类型不是 MahjongAction 或 'auto'
+            ValueError: 如果动作类型不是 WIN 或 PASS
+            ValueError: 如果玩家不在 rob_kong_players 列表中却尝试抢杠
         """
         # 如果跳过状态，直接回到GONG执行补杠
         if hasattr(context, 'should_skip_wait_rob_kong') and context.should_skip_wait_rob_kong:
