@@ -13,7 +13,7 @@
 - LSP: 符合 GameState 接口契约
 """
 
-from typing import Union, Dict, Callable
+from typing import Union, Dict, Callable, List
 
 from src.mahjong_rl.core.GameData import GameContext
 from src.mahjong_rl.core.PlayerData import PlayerData
@@ -92,12 +92,24 @@ class MeldDecisionState(GameState):
         current_player_idx = context.current_player_idx
         current_player_data = context.players[current_player_idx]
 
+        # ===== 新增：动作验证 =====
+        # 获取可用动作列表
+        available_actions = self._get_available_actions(context, current_player_data)
+
+        # 验证动作是否合法
+        if not self.validate_action(context, action, available_actions):
+            raise ValueError(
+                f"Invalid action {action.action_type.name} (param={action.parameter}) "
+                f"in MELD_DECISION state for player {current_player_idx}. "
+                f"Available actions: {[f'{a.action_type.name}({a.parameter})' for a in available_actions[:5]]}..."
+            )
+
+        # ===== 原有逻辑 =====
         # 保存杠牌动作到context（供GongState使用）
         if action.action_type in [ActionType.KONG_SUPPLEMENT, ActionType.KONG_CONCEALED,
                                 ActionType.KONG_RED, ActionType.KONG_SKIN, ActionType.KONG_LAZY]:
             context.last_kong_action = action
 
-        # 解析动作类型
         action_type = action.action_type
 
         # 使用策略模式处理动作
@@ -255,6 +267,29 @@ class MeldDecisionState(GameState):
             context: 游戏上下文
         """
         pass
+
+    def _get_available_actions(self, context: GameContext, current_player_data: PlayerData) -> List[MahjongAction]:
+        """
+        获取鸣牌后可用动作列表
+
+        鸣牌后不能胡牌，只能：出牌、暗杠、红中杠、皮子杠、赖子杠、补杠
+
+        Args:
+            context: 游戏上下文
+            current_player_data: 当前玩家数据
+
+        Returns:
+            可用动作列表
+        """
+        from src.mahjong_rl.rules.wuhan_mahjong_rule_engine.action_validator import ActionValidator
+
+        validator = ActionValidator(context)
+        available_actions = validator.detect_available_actions_after_meld(
+            current_player_data
+        )
+
+        # 过滤掉 WIN 动作（鸣牌后不能立即胡）
+        return [a for a in available_actions if a.action_type != ActionType.WIN]
 
 
 if __name__ == "__main__":

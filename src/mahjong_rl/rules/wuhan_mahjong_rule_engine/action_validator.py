@@ -217,6 +217,60 @@ class ActionValidator:
 
         return available_actions
 
+    def detect_available_actions_after_meld(self, current_player: PlayerData) -> List[MahjongAction]:
+        """
+        检测鸣牌后可用的动作
+
+        鸣牌后不能胡牌，只能：出牌、暗杠、红中杠、皮子杠、赖子杠、补杠
+
+        Args:
+            current_player: 当前玩家数据
+
+        Returns:
+            可用动作列表
+        """
+        available_actions = []
+        temp_hand = current_player.hand_tiles.copy()
+
+        # 1. 检测所有可打出的牌（排除特殊牌）
+        for tile in temp_hand:
+            # 不能打特殊牌（赖子、皮、红中）
+            if tile in self.special_tiles:
+                continue
+
+            # 排除副露中的牌
+            in_melds = any(tile in meld.tiles for meld in current_player.melds)
+            if not in_melds:
+                available_actions.append(MahjongAction(ActionType.DISCARD, tile))
+
+        # 2. 检测暗杠（手牌中有4张相同的牌）
+        tile_counts = Counter(temp_hand)
+        for tile, count in tile_counts.items():
+            if count >= 4 and tile not in self.special_tiles:
+                available_actions.append(MahjongAction(ActionType.KONG_CONCEALED, tile))
+
+        # 3. 检测红中杠
+        if current_player.hand_tiles.count(self.context.red_dragon) >= 1:
+            available_actions.append(MahjongAction(ActionType.KONG_RED, self.context.red_dragon))
+
+        # 4. 检测皮子杠
+        for skin_tile in self.context.skin_tile:
+            if skin_tile != -1 and current_player.hand_tiles.count(skin_tile) >= 1:
+                available_actions.append(MahjongAction(ActionType.KONG_SKIN, skin_tile))
+
+        # 5. 检测赖子杠
+        if self.context.lazy_tile is not None and current_player.hand_tiles.count(self.context.lazy_tile) >= 1:
+            available_actions.append(MahjongAction(ActionType.KONG_LAZY, self.context.lazy_tile))
+
+        # 6. 检测补杠（如果有碰牌，手牌有第4张）
+        for meld in current_player.melds:
+            if meld.action_type.action_type == ActionType.PONG:
+                pong_tile = meld.tiles[0]
+                if pong_tile in current_player.hand_tiles:
+                    available_actions.append(MahjongAction(ActionType.KONG_SUPPLEMENT, pong_tile))
+
+        return available_actions
+
     def _can_win_by_discard(self, current_player: PlayerData, discard_tile: int) -> bool:
         """
         判断是否可以接炮胡牌
