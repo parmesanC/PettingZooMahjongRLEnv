@@ -182,6 +182,61 @@ class MahjongScoreSettler:
 
         return fan_components
 
+    def check_min_fan_requirement(self, player_id: int, win_types: List[WinType], ctx: GameContext) -> bool:
+        """
+        检查起胡番要求
+
+        武汉麻将规则：起胡番需要达到16番
+        计算方式：每个玩家的分数 + 赢家分数 >= 16
+
+        Args:
+            player_id: 玩家ID
+            win_types: 胡牌类型列表
+            ctx: 游戏上下文
+
+        Returns:
+            True 如果满足起胡番要求
+        """
+        # 获取玩家
+        player = ctx.players[player_id]
+
+        # 创建临时 WinCheckResult 用于计算分数
+        temp_result = WinCheckResult(
+            can_win=True,
+            win_type=win_types,
+            min_wild_need=0
+        )
+
+        # 保存原始状态
+        original_is_win = player.is_win
+        original_winner_ids = ctx.winner_ids.copy() if ctx.winner_ids else []
+        original_win_way = ctx.win_way
+        original_discard_player = ctx.discard_player
+
+        # 临时设置为赢家（使用自摸方式计算，避免承包等复杂逻辑）
+        player.is_win = True
+        ctx.winner_ids = [player_id]
+        ctx.win_way = WinWay.SELF_DRAW.value
+        ctx.discard_player = None
+
+        try:
+            # 计算分数
+            score_list = self.settle(temp_result, ctx)
+            winner_score = max(score_list)
+
+            # 检查是否达到起胡番（16番）
+            # 每个玩家的分数绝对值 + 赢家分数 >= 16
+            if all(abs(score) + winner_score >= 16 for score in score_list):
+                return True
+
+            return False
+        finally:
+            # 恢复原始状态
+            player.is_win = original_is_win
+            ctx.winner_ids = original_winner_ids
+            ctx.win_way = original_win_way
+            ctx.discard_player = original_discard_player
+
     def _is_kou(self, meld: Meld) -> bool:
         """判断是否为开口（吃、碰、明杠）"""
         return meld.is_opened and meld.action_type.action_type in [
