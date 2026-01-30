@@ -184,7 +184,7 @@ class ActionValidator:
                         available_actions.append(MahjongAction(ActionType.KONG_RED, 0))
                     elif card in self.context.skin_tile:
                         available_actions.append(MahjongAction(ActionType.KONG_SKIN, card))
-            if count > 3:
+            if count >= 4:
                 available_actions.append(MahjongAction(ActionType.KONG_CONCEALED, card))
 
             if count > 0 and any(meld.tiles[0] == card for meld in melds if meld.action_type == ActionType.PONG):
@@ -264,7 +264,7 @@ class ActionValidator:
 
         # 5. 检测赖子杠
         if self.context.lazy_tile is not None and current_player.hand_tiles.count(self.context.lazy_tile) >= 1:
-            available_actions.append(MahjongAction(ActionType.KONG_LAZY, self.context.lazy_tile))
+            available_actions.append(MahjongAction(ActionType.KONG_LAZY, 0))
 
         # 6. 检测补杠（如果有碰牌，手牌有第4张）
         for meld in current_player.melds:
