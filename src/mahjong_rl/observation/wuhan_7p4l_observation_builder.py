@@ -186,9 +186,9 @@ class Wuhan7P4LObservationBuilder(IObservationBuilder):
         可以：暗杠、补杠、红中杠、赖子杠、皮子杠、出牌
         不能：胡牌、过
         """
-        # 不依赖 last_drawn_tile，直接基于手牌检测
-        actions = ActionValidator(context).detect_available_actions_after_draw(
-            player, None
+        # 使用 detect_available_actions_after_meld（与 meld_decision_state 一致）
+        actions = ActionValidator(context).detect_available_actions_after_meld(
+            player
         )
 
         for action in actions:
