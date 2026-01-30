@@ -255,7 +255,7 @@ class ActionValidator:
 
         # 3. 检测红中杠
         if current_player.hand_tiles.count(self.context.red_dragon) >= 1:
-            available_actions.append(MahjongAction(ActionType.KONG_RED, self.context.red_dragon))
+            available_actions.append(MahjongAction(ActionType.KONG_RED, 0))
 
         # 4. 检测皮子杠
         for skin_tile in self.context.skin_tile:
