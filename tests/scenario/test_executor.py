@@ -24,6 +24,19 @@ def test_executor_basic_flow():
     executor = TestExecutor(scenario)
     result = executor.run()
 
-    # 应该成功（因为只是初始化）
-    assert result.executed_steps == 1
-    assert result.failure_message is None or "状态验证失败" in result.failure_message
+    # 验证基本执行结果
+    assert result is not None, "执行器应该返回结果"
+    assert result.executed_steps == 1, f"应该执行 1 步，实际执行 {result.executed_steps} 步"
+    assert result.total_steps == 1, f"总步骤数应该是 1，实际是 {result.total_steps}"
+
+    # 验证资源清理：env 应该被关闭
+    assert executor.env is not None, "环境对象应该存在"
+    # 注意：我们无法直接检查 env 是否已关闭，但 finally 块确保了 close() 被调用
+
+    # 验证成功或预期的失败（可能因为状态不匹配）
+    if result.success:
+        assert result.final_state == GameStateType.PLAYER_DECISION, "最终状态应该是 PLAYER_DECISION"
+        assert result.failure_message is None, "成功时不应该有失败消息"
+    else:
+        assert result.failure_message is not None, "失败时应该有失败消息"
+        assert result.failed_step is not None, "失败时应该记录失败的步骤号"

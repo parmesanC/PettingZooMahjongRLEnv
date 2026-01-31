@@ -94,6 +94,11 @@ class TestExecutor:
             if self.env and self.env.context:
                 self.result.final_context_snapshot = self._create_snapshot()
 
+        finally:
+            # 确保环境资源被正确释放
+            if self.env is not None:
+                self.env.close()
+
         return self.result
 
     def _execute_step(self, step: StepConfig):
