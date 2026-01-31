@@ -227,6 +227,100 @@ class TestExecutor:
             'winner_ids': context.winner_ids if hasattr(context, 'winner_ids') else [],
         }
 
+    def _apply_custom_initialization(self) -> None:
+        """应用自定义初始状态配置
+
+        根据 scenario.initial_config 配置游戏状态，
+        完全绕过 InitialState 的自动初始化流程。
+
+        Raises:
+            ValueError: 如果配置缺少必需字段
+        """
+        config = self.scenario.initial_config
+        if not config:
+            return
+
+        context = self.env.context
+
+        # 1. 设置庄家
+        if 'dealer_idx' in config:
+            dealer_idx = config['dealer_idx']
+            if not 0 <= dealer_idx <= 3:
+                raise ValueError(f"dealer_idx 必须在 0-3 之间，得到 {dealer_idx}")
+            context.dealer_idx = dealer_idx
+
+        # 2. 设置当前玩家
+        if 'current_player_idx' in config:
+            current_player = config['current_player_idx']
+            if not 0 <= current_player <= 3:
+                raise ValueError(f"current_player_idx 必须在 0-3 之间，得到 {current_player}")
+            context.current_player_idx = current_player
+
+        # 3. 设置玩家手牌
+        if 'hands' in config:
+            hands = config['hands']
+            for player_id, tiles in hands.items():
+                if not 0 <= player_id <= 3:
+                    raise ValueError(f"玩家ID必须在 0-3 之间，得到 {player_id}")
+                context.players[player_id].hand_tiles = tiles.copy()
+                # 设置 is_dealer 标志
+                if 'dealer_idx' in config:
+                    context.players[player_id].is_dealer = (player_id == config['dealer_idx'])
+
+        # 4. 设置牌墙
+        if 'wall' in config:
+            context.wall.clear()
+            context.wall.extend(config['wall'])
+
+        # 5. 设置特殊牌
+        if 'special_tiles' in config:
+            special = config['special_tiles']
+            if 'lazy' in special:
+                context.lazy_tile = special['lazy']
+            if 'skins' in special:
+                skins = special['skins']
+                if len(skins) >= 2:
+                    context.skin_tile = [skins[0], skins[1]]
+            # 更新 special_tiles 元组
+            context.special_tiles = (
+                context.lazy_tile,
+                context.skin_tile[0] if context.skin_tile else -1,
+                context.skin_tile[1] if context.skin_tile else -1,
+                context.red_dragon
+            )
+
+        # 6. 设置 last_drawn_tile（庄家刚摸的牌）
+        if 'last_drawn_tile' in config:
+            context.last_drawn_tile = config['last_drawn_tile']
+
+        # 7. 初始化其他必要字段
+        context.current_state = GameStateType.PLAYER_DECISION
+        context.observation = None
+        context.action_mask = None
+
+        # 重置响应相关状态
+        context.discard_pile = []
+        context.last_discarded_tile = None
+        context.pending_responses = {}
+        context.response_order = []
+        context.current_responder_idx = 0
+        context.selected_responder = None
+        context.response_priorities = {}
+
+        # 重置杠牌相关状态
+        context.last_kong_action = None
+        context.last_kong_player_idx = None
+
+        # 重置游戏结果状态
+        context.is_win = False
+        context.is_flush = False
+        context.winner_ids = []
+        context.reward = 0.0
+
+        # 初始化 special_gangs
+        for i in range(4):
+            context.players[i].special_gangs = [0, 0, 0]
+
 
 # 导入验证器函数用于快捷验证
 from tests.scenario.validators import hand_contains, wall_count_equals, discard_pile_contains
