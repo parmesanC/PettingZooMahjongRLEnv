@@ -44,6 +44,9 @@ class ScenarioContext:
     special_tiles: Optional[Dict[str, Any]] = None
     seed: Optional[int] = None
 
+    # 自定义初始状态配置（绕过 InitialState）
+    initial_config: Optional[Dict[str, Any]] = None
+
     # 步骤配置
     steps: List[StepConfig] = field(default_factory=list)
 
