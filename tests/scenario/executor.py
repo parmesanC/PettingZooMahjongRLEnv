@@ -44,22 +44,27 @@ class TestExecutor:
                 enable_logging=False  # 测试时关闭日志
             )
 
-            # 重置环境
-            self.env.reset(seed=self.scenario.seed)
+            # 检查是否有自定义初始状态配置
+            if self.scenario.initial_config is not None:
+                # 使用自定义初始化，绕过 env.reset()
+                self._apply_custom_initialization()
+            else:
+                # 使用标准初始化流程
+                self.env.reset(seed=self.scenario.seed)
 
-            # 配置牌墙
-            if self.scenario.wall:
-                self.env.context.wall.clear()
-                self.env.context.wall.extend(self.scenario.wall)
+                # 配置牌墙（标准流程）
+                if self.scenario.wall:
+                    self.env.context.wall.clear()
+                    self.env.context.wall.extend(self.scenario.wall)
 
-            # 配置特殊牌
-            if self.scenario.special_tiles:
-                if 'lazy' in self.scenario.special_tiles:
-                    self.env.context.lazy_tile = self.scenario.special_tiles['lazy']
-                if 'skins' in self.scenario.special_tiles:
-                    skins = self.scenario.special_tiles['skins']
-                    if len(skins) >= 2:
-                        self.env.context.skin_tile = [skins[0], skins[1]]
+                # 配置特殊牌（标准流程）
+                if self.scenario.special_tiles:
+                    if 'lazy' in self.scenario.special_tiles:
+                        self.env.context.lazy_tile = self.scenario.special_tiles['lazy']
+                    if 'skins' in self.scenario.special_tiles:
+                        skins = self.scenario.special_tiles['skins']
+                        if len(skins) >= 2:
+                            self.env.context.skin_tile = [skins[0], skins[1]]
 
             self.result.total_steps = len(self.scenario.steps)
 
