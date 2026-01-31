@@ -4,11 +4,10 @@
 提供常用的验证器函数，用于验证游戏状态。
 """
 
-from typing import List, Callable, Dict
+from typing import List, Callable
 from collections import Counter
 from src.mahjong_rl.core.GameData import GameContext
 from src.mahjong_rl.core.constants import GameStateType, ActionType
-from src.mahjong_rl.core.mahjong_action import MahjongAction
 
 
 def hand_count_equals(player_id: int, expected_count: int) -> Callable[[GameContext], bool]:
