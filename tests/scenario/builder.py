@@ -237,6 +237,52 @@ class ScenarioBuilder:
         self.context.expect_winner = winners
         return self
 
+    def with_initial_state(self, config: Dict[str, Any]) -> 'ScenarioBuilder':
+        """设置自定义初始状态，绕过 InitialState 的自动初始化
+
+        这允许用户完全控制游戏初始状态，包括：
+        - 庄家位置和当前玩家
+        - 每个玩家的手牌
+        - 牌墙顺序
+        - 特殊牌（赖子、皮子）
+        - 庄家刚摸的牌（用于 PLAYER_DECISION 状态）
+
+        Args:
+            config: 初始状态配置字典
+                - dealer_idx (int): 庄家位置 (0-3)
+                - current_player_idx (int): 当前玩家 (0-3)
+                - hands (Dict[int, List[int]]): 玩家手牌 {player_id: [tiles]}
+                - wall (List[int]): 牌墙
+                - special_tiles (Dict): 特殊牌 {lazy: int, skins: [int, int]}
+                - last_drawn_tile (int, optional): 庄家刚摸的牌
+
+        Returns:
+            self，支持链式调用
+
+        Example:
+            ```python
+            result = (
+                ScenarioBuilder("自定义状态测试")
+                .with_initial_state({
+                    'dealer_idx': 0,
+                    'current_player_idx': 0,
+                    'hands': {
+                        0: [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 4, 5, 6],  # 13张
+                        1: [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+                        2: [20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32],
+                        3: [33, 33, 33, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+                    },
+                    'wall': [11, 12, 13, ...],  # 剩余牌墙
+                    'special_tiles': {'lazy': 8, 'skins': [7, 9]},
+                    'last_drawn_tile': 6,
+                })
+                .run()
+            )
+            ```
+        """
+        self.context.initial_config = config
+        return self
+
     def _add_pending_step(self):
         """添加当前待处理的步骤到场景
 
