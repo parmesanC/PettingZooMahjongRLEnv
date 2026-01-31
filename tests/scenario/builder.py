@@ -126,6 +126,24 @@ class StepBuilder:
         self.step_config.verify_wall_count = expected
         return self
 
+    def run(self) -> 'TestResult':
+        """执行测试场景
+
+        将步骤添加到场景后，通过 ScenarioBuilder 执行测试。
+
+        Returns:
+            TestResult 测试结果
+        """
+        from tests.scenario.executor import TestExecutor
+
+        # 将当前步骤添加到场景（如果尚未添加）
+        if self.step_config not in self.scenario.steps:
+            self.scenario.steps.append(self.step_config)
+
+        # 创建执行器并运行
+        executor = TestExecutor(self.scenario)
+        return executor.run()
+
     def __enter__(self):
         """支持 with 语句"""
         return self

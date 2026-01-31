@@ -44,14 +44,16 @@ class TestExecutor:
                 enable_logging=False  # 测试时关闭日志
             )
 
+            # 先调用 reset() 初始化 context 和状态机
+            # 即使使用自定义初始化，我们也需要先初始化基础结构
+            self.env.reset(seed=self.scenario.seed)
+
             # 检查是否有自定义初始状态配置
             if self.scenario.initial_config is not None:
-                # 使用自定义初始化，绕过 env.reset()
+                # 使用自定义初始化，覆盖 reset() 的结果
                 self._apply_custom_initialization()
             else:
                 # 使用标准初始化流程
-                self.env.reset(seed=self.scenario.seed)
-
                 # 配置牌墙（标准流程）
                 if self.scenario.wall:
                     self.env.context.wall.clear()
