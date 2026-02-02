@@ -28,3 +28,4 @@ def test_scenario_with_wall():
     )
 
     assert result.success is True
+

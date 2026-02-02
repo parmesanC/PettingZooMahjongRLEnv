@@ -74,10 +74,6 @@ class ManualController(ABC):
 
                 obs, reward, terminated, truncated, info = self.env.last()
 
-                # 只有人类玩家才渲染
-                if self._is_human_player(agent):
-                    self.render_env()
-
                 if terminated or truncated:
                     action = None
                 else:

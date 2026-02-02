@@ -16,7 +16,17 @@
       "Bash(git commit:*)",
       "Skill(superpowers:subagent-driven-development)",
       "Bash(pytest:*)",
-      "Bash(git show:*)"
+      "Bash(git show:*)",
+      "Skill(superpowers:requesting-code-review)",
+      "Bash(git rev-parse:*)",
+      "Bash(grep:*)",
+      "Bash(D:DATADevelopmentAnacondacondabinconda.bat activate:*)",
+      "Skill(superpowers:writing-plans)",
+      "Bash(git -C \"D:\\\\DATA\\\\Python_Project\\\\Code\\\\PettingZooRLENVMahjong\" show a826af4 --stat)",
+      "Bash(git -C \"D:\\\\DATA\\\\Python_Project\\\\Code\\\\PettingZooRLENVMahjong\" show a826af4)",
+      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\condabin\\\\conda.bat\" activate PettinZooRLMahjong)",
+      "Bash(git -C \"D:\\\\DATA\\\\Python_Project\\\\Code\\\\PettingZooRLENVMahjong\" diff 62bf4c2 a826af4 --stat)",
+      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\condabin\\\\conda.bat\" activate PettingZooRLMahjong)"
     ]
   }
 }

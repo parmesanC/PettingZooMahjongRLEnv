@@ -91,6 +91,8 @@ class TestExecutor:
 
             self.result.success = True
             self.result.final_state = self.env.state_machine.current_state_type
+            # 无论成功失败都创建快照
+            self.result.final_context_snapshot = self._create_snapshot()
 
         except Exception as e:
             self.result.success = False
@@ -327,6 +329,10 @@ class TestExecutor:
         # 初始化 special_gangs
         for i in range(4):
             context.players[i].special_gangs = [0, 0, 0]
+
+        # 8. 同步 env.agent_selection（重要！env 依赖 agent_selection 来确定当前玩家）
+        # agent_selection 格式为 "player_0", "player_1" 等
+        self.env.agent_selection = f'player_{context.current_player_idx}'
 
 
 # 导入验证器函数用于快捷验证

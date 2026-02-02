@@ -37,6 +37,8 @@ class GameContext:
     last_drawn_tile: Optional[int] = None  # 最后摸到的牌（用于PLAYER_DECISION状态检测可用动作）
     pending_discard_tile: Optional[int] = None  # 待打出的牌（由PLAYER_DECISION状态设置，DISCARDING状态执行）
     pending_responses: Optional[Dict[int, ActionType]] = field(default_factory=dict)  # 等待响应的玩家动作类型（吃/碰/杠）
+    last_kong_action: Optional[MahjongAction] = None  # 最后一次杠牌动作（供GongState使用）
+    last_kong_player_idx: Optional[int] = None  # 最后杠牌玩家索引
 
     # 特殊牌（动态生成）
     lazy_tile: int = None  # 赖子牌
@@ -66,7 +68,6 @@ class GameContext:
     current_responder_idx: int = 0  # 当前响应玩家索引
     response_priorities: Dict[int, int] = field(default_factory=dict)  # 玩家响应优先级（值越小优先级越高）
     selected_responder: Optional[int] = None  # 最终被选中的响应者
-    last_kong_action: Optional[MahjongAction] = None  # 最后一次杠牌动作（供GongState使用）
 
     # 响应状态优化：真实响应者列表（排除只能 PASS 的玩家）
     active_responders: List[int] = field(default_factory=list)  # 真实需要响应的玩家列表

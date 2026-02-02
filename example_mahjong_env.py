@@ -502,28 +502,28 @@ class WuhanMahjongEnv(AECEnv):
     def observe(self, agent: str) -> Dict[str, np.ndarray]:
         """
         为指定agent生成观测
-        
+
         Args:
             agent: agent名称（如'player_0'）
-        
+
         Returns:
             观测字典
         """
         agent_idx = self.agents_name_mapping[agent]
-        
-        # 懒加载观测
-        if self.context.observation is None:
-            self.context.observation = self.state_machine.observation_builder.build(
-                agent_idx,
-                self.context
-            )
-        
+
+        # 每次都为当前 agent 重新构建观测（不使用缓存）
+        # 原因：不同 agent 需要不同的观测（private_hand 不同）
+        observation = self.state_machine.observation_builder.build(
+            agent_idx,
+            self.context
+        )
+
         # 应用信息可见度掩码
         observation = self._apply_visibility_mask(
-            self.context.observation.copy(),
+            observation,
             agent_idx
         )
-        
+
         return observation
     
     def _convert_action(self, action: Tuple[int, int]) -> MahjongAction:

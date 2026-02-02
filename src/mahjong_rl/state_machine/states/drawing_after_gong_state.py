@@ -80,7 +80,7 @@ class DrawingAfterGongState(GameState):
             return GameStateType.FLOW_DRAW
 
         # 摸牌
-        draw_tile = context.wall.popleft()
+        draw_tile = context.wall.pop()
         current_player = context.players[context.current_player_idx]
         current_player.hand_tiles.append(draw_tile)
 

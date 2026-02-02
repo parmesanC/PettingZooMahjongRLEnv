@@ -164,10 +164,6 @@ class ActionValidator:
         """
         temp_hand = current_player.hand_tiles.copy()
 
-        # 只在 draw_tile 不为 None 且不在手牌中时添加（避免重复添加）
-        if draw_tile is not None and draw_tile not in temp_hand:
-            temp_hand.append(draw_tile)
-
         temp_hand_counter = Counter(temp_hand)
         melds = current_player.melds.copy()
 
@@ -187,14 +183,12 @@ class ActionValidator:
             if count >= 4:
                 available_actions.append(MahjongAction(ActionType.KONG_CONCEALED, card))
 
-            if count > 0 and any(meld.tiles[0] == card for meld in melds if meld.action_type == ActionType.PONG):
+            if count > 0 and any(meld.tiles[0] == card for meld in melds if meld.is_pong):
                 available_actions.append(MahjongAction(ActionType.KONG_SUPPLEMENT, card))
 
         # 3. 检查是否和牌
         temp_hand = current_player.hand_tiles.copy()
-        # 只在 draw_tile 不为 None 且不在手牌中时添加
-        if draw_tile is not None and draw_tile not in temp_hand:
-            temp_hand.append(draw_tile)
+
         temp_player = PlayerData(
             player_id=current_player.player_id,
             hand_tiles=temp_hand,

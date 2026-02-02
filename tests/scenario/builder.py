@@ -4,9 +4,12 @@
 提供链式调用的流式接口用于构建测试场景。
 """
 
-from typing import List, Optional, Dict, Any, Callable
+from typing import List, Optional, Dict, Any, Callable, TYPE_CHECKING
 from tests.scenario.context import ScenarioContext, StepConfig
 from src.mahjong_rl.core.constants import GameStateType, ActionType
+
+if TYPE_CHECKING:
+    from tests.scenario.builder import ScenarioBuilder
 
 
 class StepBuilder:
@@ -17,6 +20,7 @@ class StepBuilder:
 
     def __init__(
         self,
+        scenario_builder: 'ScenarioBuilder',
         scenario_context: ScenarioContext,
         step_number: int,
         description: str
@@ -24,10 +28,12 @@ class StepBuilder:
         """初始化步骤构建器
 
         Args:
+            scenario_builder: 场景构建器引用（用于代理方法）
             scenario_context: 场景上下文
             step_number: 步骤编号
             description: 步骤描述
         """
+        self.scenario_builder = scenario_builder
         self.scenario = scenario_context
         self.step_config = StepConfig(
             step_number=step_number,
@@ -126,23 +132,25 @@ class StepBuilder:
         self.step_config.verify_wall_count = expected
         return self
 
-    def run(self) -> 'TestResult':
-        """执行测试场景
+    def step(self, step_number: int, description: str) -> 'StepBuilder':
+        """代理到 ScenarioBuilder.step()，支持链式调用
 
-        将步骤添加到场景后，通过 ScenarioBuilder 执行测试。
+        Args:
+            step_number: 步骤编号
+            description: 步骤描述
+
+        Returns:
+            新的 StepBuilder 实例
+        """
+        return self.scenario_builder.step(step_number, description)
+
+    def run(self) -> 'TestResult':
+        """代理到 ScenarioBuilder.run()，执行测试场景
 
         Returns:
             TestResult 测试结果
         """
-        from tests.scenario.executor import TestExecutor
-
-        # 将当前步骤添加到场景（如果尚未添加）
-        if self.step_config not in self.scenario.steps:
-            self.scenario.steps.append(self.step_config)
-
-        # 创建执行器并运行
-        executor = TestExecutor(self.scenario)
-        return executor.run()
+        return self.scenario_builder.run()
 
     def __enter__(self):
         """支持 with 语句"""
@@ -221,7 +229,7 @@ class ScenarioBuilder:
         self,
         step_number: int,
         description: str
-    ) -> StepBuilder:
+    ) -> 'StepBuilder':
         """开始一个新步骤
 
         Args:
@@ -239,8 +247,8 @@ class ScenarioBuilder:
         # 自动添加上一个未添加的步骤（如果存在）
         self._add_pending_step()
 
-        # 创建新的步骤构建器并保存引用
-        self._current_step_builder = StepBuilder(self.context, step_number, description)
+        # 创建新的步骤构建器并保存引用，传递 self 引用用于代理
+        self._current_step_builder = StepBuilder(self, self.context, step_number, description)
         return self._current_step_builder
 
     def expect_winner(self, winners: List[int]) -> 'ScenarioBuilder':

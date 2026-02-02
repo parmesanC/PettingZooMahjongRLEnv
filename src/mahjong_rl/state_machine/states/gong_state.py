@@ -59,11 +59,6 @@ class GongState(GameState):
         context.observation = None
         context.action_mask = None
 
-        # 如果从 WaitRobKongState 回来，需要执行补杠
-        if hasattr(context, 'need_execute_supplement_kong') and context.need_execute_supplement_kong:
-            self.execute_supplement_kong_after_rob_check(context)
-            delattr(context, 'need_execute_supplement_kong')
-
     def step(self, context: GameContext, action: Optional[str] = None) -> GameStateType:
         """
         处理杠牌
@@ -236,47 +231,6 @@ class GongState(GameState):
             )
         )
 
-    def _handle_kong_supplement(self, context: GameContext, player: PlayerData, tile: int):
-        """
-        处理补杠（在抢杠和检查通过后调用）
-
-        玩家已有碰牌，摸到第4张。
-
-        Args:
-            context: 游戏上下文
-            player: 玩家数据
-            tile: 杠牌
-        """
-        # 找到已有的碰牌
-        pong_meld = None
-        for meld in player.melds:
-            if meld.action_type.action_type == ActionType.PONG and meld.tiles[0] == tile:
-                pong_meld = meld
-                break
-
-        if pong_meld:
-            # 移除碰牌
-            player.melds.remove(pong_meld)
-            # 从手牌移除一张牌
-            player.hand_tiles.remove(tile)
-
-            # 添加补杠
-            meld = Meld(
-                action_type=MahjongAction(ActionType.KONG_SUPPLEMENT, tile),
-                tiles=[tile, tile, tile, tile],
-                from_player=pong_meld.from_player
-            )
-            player.melds.append(meld)
-
-            # 记录动作历史
-            context.action_history.append(
-                ActionRecord(
-                    action_type=MahjongAction(ActionType.KONG_SUPPLEMENT, tile),
-                    tile=tile,
-                    player_id=player.player_id
-                )
-            )
-
     def _handle_special_kong(self, context: GameContext, player: PlayerData, tile: int, kong_type: str):
         """
         处理特殊杠（红中、皮子、赖子）
@@ -319,32 +273,3 @@ class GongState(GameState):
                 player_id=player.player_id
             )
         )
-
-    def execute_supplement_kong_after_rob_check(self, context: GameContext):
-        """
-        在抢杠和检查通过后，执行补杠操作
-
-        这个方法在WaitRobKongState确定没有玩家抢杠和后被调用。
-
-        Args:
-            context: 游戏上下文
-        """
-        player_id = context.kong_player_idx
-        player = context.players[player_id]
-        kong_action = context.saved_kong_action
-        kong_tile = kong_action.parameter
-
-        # 执行补杠
-        self._handle_kong_supplement(context, player, kong_tile)
-
-        # 清理临时变量
-        if hasattr(context, 'rob_kong_tile'):
-            delattr(context, 'rob_kong_tile')
-        if hasattr(context, 'kong_player_idx'):
-            delattr(context, 'kong_player_idx')
-        if hasattr(context, 'saved_kong_action'):
-            delattr(context, 'saved_kong_action')
-
-        # 设置杠后摸牌标记
-        context.current_player_idx = player_id
-        context.is_kong_draw = True

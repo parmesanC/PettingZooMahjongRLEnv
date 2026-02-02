@@ -15,7 +15,7 @@ from typing import Dict, List, Optional, Union
 
 from src.mahjong_rl.core.GameData import GameContext, ActionRecord
 from src.mahjong_rl.core.PlayerData import PlayerData
-from src.mahjong_rl.core.constants import GameStateType, ActionType
+from src.mahjong_rl.core.constants import GameStateType, ActionType, WinWay
 from src.mahjong_rl.core.mahjong_action import MahjongAction
 from src.mahjong_rl.observation.builder import IObservationBuilder
 from src.mahjong_rl.rules.base import IRuleEngine
@@ -63,36 +63,35 @@ class WaitRobKongState(GameState):
         kong_tile = context.rob_kong_tile  # 从context获取被抢杠的牌
 
         # 检查哪些玩家可以抢杠和
-        self.rob_kong_players = []
+        rob_kong_players = []
         for i, player in enumerate(context.players):
             if i == kong_player_idx:
                 continue
 
             # 检查是否可以胡这张牌（将牌加入手牌后检查）
             if self._can_rob_kong(context, player, kong_tile):
-                self.rob_kong_players.append(i)
+                rob_kong_players.append(i)
 
         # 设置响应顺序（按照逆时针顺序，从下家开始）
-        self.response_order = []
+        context.response_order = []
         for i in range(1, 4):
             player_idx = (kong_player_idx + i) % 4
-            if player_idx in self.rob_kong_players:
-                self.response_order.append(player_idx)
+            if player_idx in rob_kong_players:
+                context.response_order.append(player_idx)
+
+        # 设置 active_responders（用于自动跳过优化）
+        context.active_responders = context.response_order.copy()
+        context.active_responder_idx = 0
 
         # 初始化响应字典
-        context.rob_kong_responses = {}
+        context.pending_responses = {}
 
-        # 设置当前响应者索引
-        context.current_responder_idx = 0
-
-        # 如果没有玩家能抢杠和，直接跳过
-        if not self.response_order:
-            context.should_skip_wait_rob_kong = True
+        # 如果没有玩家能抢杠和，不生成观测
+        if not context.active_responders:
+            context.current_player_idx = kong_player_idx
         else:
-            context.should_skip_wait_rob_kong = False
             # 为第一个响应者生成观测
-            first_responder = self.response_order[0]
-            context.current_player_idx = first_responder
+            context.current_player_idx = context.response_order[0]
             self.build_observation(context)
 
     def step(self, context: GameContext, action: Union[MahjongAction, str]) -> GameStateType:
@@ -108,30 +107,30 @@ class WaitRobKongState(GameState):
 
         Returns:
             WIN 如果有玩家抢杠和成功
-            GONG 如果都PASS（执行补杠）
+            DRAWING_AFTER_GONG 如果都PASS（执行补杠）
 
         Raises:
             ValueError: 如果动作类型不是 MahjongAction 或 'auto'
             ValueError: 如果动作类型不是 WIN 或 PASS
-            ValueError: 如果玩家不在 rob_kong_players 列表中却尝试抢杠
+            ValueError: 如果玩家不在 active_responders 列表中却尝试抢杠
         """
-        # 如果跳过状态，直接回到GONG执行补杠
-        if hasattr(context, 'should_skip_wait_rob_kong') and context.should_skip_wait_rob_kong:
-            return GameStateType.GONG
+        # 如果没有玩家能抢杠，直接执行补杠
+        if not context.active_responders:
+            return self._check_rob_kong_result(context)
 
         # 获取当前响应者
-        if context.current_responder_idx >= len(self.response_order):
+        if context.active_responder_idx >= len(context.active_responders):
             # 所有玩家都已响应，检查结果
             return self._check_rob_kong_result(context)
 
-        current_responder = self.response_order[context.current_responder_idx]
+        current_responder = context.active_responders[context.active_responder_idx]
 
         # 处理当前玩家的响应
         if action == 'auto':
             # 如果是自动模式，默认PASS
             response_action = MahjongAction(ActionType.PASS, -1)
         else:
-            # ===== 新增：验证动作类型 =====
+            # 验证动作类型
             if not isinstance(action, MahjongAction):
                 raise ValueError(
                     f"WaitRobKongState expects MahjongAction or 'auto', got {type(action).__name__}"
@@ -146,34 +145,53 @@ class WaitRobKongState(GameState):
                     f"got {response_action.action_type.name}"
                 )
 
-            # ===== 新增：验证抢杠条件（防御性检查）=====
+            # 验证抢杠条件（防御性检查）
             if response_action.action_type == ActionType.WIN:
-                if current_responder not in self.rob_kong_players:
+                if current_responder not in context.active_responders:
                     raise ValueError(
                         f"Player {current_responder} cannot rob kong: "
-                        f"not in rob_kong_players list. "
+                        f"not in active_responders list. "
                         f"Current hand: {context.players[current_responder].hand_tiles}"
                     )
 
         # 记录响应
-        context.rob_kong_responses[current_responder] = response_action
+        context.pending_responses[current_responder] = response_action
 
         # 移动到下一个响应者
-        context.current_responder_idx += 1
+        context.active_responder_idx += 1
 
         # 如果是WIN响应，直接结束（抢杠成功）
         if response_action.action_type == ActionType.WIN:
+            # 1. 把被抢的杠牌加入获胜者手牌
+            winner = context.players[current_responder]
+            winner.hand_tiles.append(context.rob_kong_tile)
+
+            # 2. 从被抢玩家手牌中移除那张牌（保留副露中的碰）
+            kong_player = context.players[context.kong_player_idx]
+            if context.rob_kong_tile in kong_player.hand_tiles:
+                kong_player.hand_tiles.remove(context.rob_kong_tile)
+
+            # 3. 记录动作历史
+            context.action_history.append(
+                ActionRecord(
+                    action_type=MahjongAction(ActionType.WIN, context.rob_kong_tile),
+                    tile=context.rob_kong_tile,
+                    player_id=current_responder
+                )
+            )
+
+            # 4. 设置获胜信息
             context.winner_ids = [current_responder]
             context.is_win = True
-            context.win_way = 1  # WinWay.ROB_KONG
+            context.win_way = WinWay.ROB_KONG.value  # WinWay.ROB_KONG
             return GameStateType.WIN
 
         # 检查是否所有玩家都已响应
-        if context.current_responder_idx >= len(self.response_order):
+        if context.active_responder_idx >= len(context.active_responders):
             return self._check_rob_kong_result(context)
 
         # 为下一个响应者生成观测
-        next_responder = self.response_order[context.current_responder_idx]
+        next_responder = context.active_responders[context.active_responder_idx]
         context.current_player_idx = next_responder
         self.build_observation(context)
 
@@ -188,10 +206,13 @@ class WaitRobKongState(GameState):
             context: 游戏上下文
         """
         # 清理临时变量
-        if hasattr(context, 'rob_kong_responses'):
-            delattr(context, 'rob_kong_responses')
-        if hasattr(context, 'should_skip_wait_rob_kong'):
-            delattr(context, 'should_skip_wait_rob_kong')
+        if hasattr(context, 'rob_kong_tile'):
+            delattr(context, 'rob_kong_tile')
+        if hasattr(context, 'pending_responses'):
+            context.pending_responses.clear()
+
+        # 注意：不清理 response_order 和 active_responders，
+        # 因为它们是 GameContext 的标准属性
 
     def _can_rob_kong(self, context: GameContext, player: PlayerData, tile: int) -> bool:
         """
@@ -236,14 +257,34 @@ class WaitRobKongState(GameState):
 
         Returns:
             WIN 如果有玩家抢杠和
-            GONG 如果都PASS
+            DRAWING_AFTER_GONG 如果都PASS（执行补杠后）
         """
         # 检查是否有玩家WIN
-        for player_idx, response in context.rob_kong_responses.items():
+        for player_idx, response in context.pending_responses.items():
             if response.action_type == ActionType.WIN:
+                # 执行抢杠和逻辑
+                # 1. 把被抢的杠牌加入获胜者手牌
+                winner = context.players[player_idx]
+                winner.hand_tiles.append(context.rob_kong_tile)
+
+                # 2. 从被抢玩家手牌中移除那张牌（保留副露中的碰）
+                kong_player = context.players[context.kong_player_idx]
+                if context.rob_kong_tile in kong_player.hand_tiles:
+                    kong_player.hand_tiles.remove(context.rob_kong_tile)
+
+                # 3. 记录动作历史
+                context.action_history.append(
+                    ActionRecord(
+                        action_type=MahjongAction(ActionType.WIN, context.rob_kong_tile),
+                        tile=context.rob_kong_tile,
+                        player_id=player_idx
+                    )
+                )
+
+                # 4. 设置获胜信息
                 context.winner_ids = [player_idx]
                 context.is_win = True
-                context.win_way = 1  # WinWay.ROB_KONG
+                context.win_way = WinWay.ROB_KONG.value
                 return GameStateType.WIN
 
         # 都PASS，直接执行补杠，然后进入杠后补牌状态
