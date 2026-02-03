@@ -80,6 +80,9 @@ class GameContext:
     next_dealer_idx: Optional[int] = None  # 下一局庄家
     retain_dealer_count: int = 0  # 连庄次数
 
+    # 游戏结束时的最终得分
+    final_scores: List[float] = field(default_factory=list)  # 存储所有玩家的最终得分（长度为4）
+
     @classmethod
     def create_new_round(
             cls,
