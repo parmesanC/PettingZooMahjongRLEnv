@@ -17,6 +17,7 @@ from src.mahjong_rl.core.constants import GameStateType
 from src.mahjong_rl.observation.builder import IObservationBuilder
 from src.mahjong_rl.rules.base import IRuleEngine
 from src.mahjong_rl.state_machine.base import GameState
+from src.mahjong_rl.rules.wuhan_mahjong_rule_engine.score_calculator import MahjongScoreSettler
 
 
 class FlushState(GameState):
@@ -62,7 +63,25 @@ class FlushState(GameState):
         # 规则：流局时，庄家保留
         # 已经在GameContext.create_new_round中处理
         # 这里不需要额外处理，只需要标记为流局
-    
+
+        # 计算流局查大叫结算
+        self._calculate_flow_draw_scores(context)
+
+    def _calculate_flow_draw_scores(self, context: GameContext) -> None:
+        """
+        计算流局查大叫结算分数
+
+        根据武汉麻将规则，流局时需要查大叫：
+        - 已听牌者可向未听牌者收取基础番钱
+        - 计翻项仅计：底翻1 + 开口翻 + 皮/中翻 + 明/暗杠翻
+        - 未听牌者若未开口，支付额 ×2
+
+        Args:
+            context: 游戏上下文
+        """
+        score_settler = MahjongScoreSettler(is_kou_kou_fan=True)
+        context.final_scores = score_settler.settle_flow_draw(context)
+
     def step(self, context: GameContext, action: Optional[str] = None) -> Optional[GameStateType]:
         """
         荒牌状态不执行任何动作
