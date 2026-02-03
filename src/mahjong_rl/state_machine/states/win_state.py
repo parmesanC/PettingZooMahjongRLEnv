@@ -90,22 +90,25 @@ class WinState(GameState):
     def _calculate_scores(self, context: GameContext):
         """
         计算分数
-        
+
         使用WuhanMahjongWinChecker和MahjongScoreSettler
         计算每个玩家的胡牌分数。
-        
+
         Args:
             context: 游戏上下文
         """
         win_checker = WuhanMahjongWinChecker(context)
         score_calculator = MahjongScoreSettler(False)
-        
+
         # 计算胡牌玩家的分数
         for winner_id in context.winner_ids:
             player = context.players[winner_id]
             win_result = win_checker.check_win(player)
-            
+
             if win_result.can_win:
                 # 计算分数
                 score_list = score_calculator.settle(win_result, context)
+                # 保存完整分数列表到 context（新增）
+                context.final_scores = score_list
+                # 同时保留赢家得分（兼容旧逻辑）
                 player.fan_count = max(score_list)
