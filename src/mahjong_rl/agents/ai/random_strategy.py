@@ -78,15 +78,18 @@ class RandomStrategy(PlayerStrategy):
                         param = int(np.random.choice(valid_tiles))
                         available_actions.append((action_type_value, param))
 
-                elif action_type in ['KONG_RED', 'KONG_LAZY', 'PONG', 'KONG_EXPOSED', 'WIN', 'PASS']:
-                    # 无参数动作
+                elif action_type in ['KONG_RED', 'KONG_LAZY', 'PONG', 'KONG_EXPOSED']:
+                    # 无参数动作，parameter 设为 0
                     # PONG 和 KONG_EXPOSED 的 parameter 被忽略（实际使用的是 discard_tile）
                     # KONG_RED 和 KONG_LAZY 只有 1 位，不需要参数
                     available_actions.append((action_type_value, 0))
+                elif action_type in ['WIN', 'PASS']:
+                    # WIN 动作的 parameter 必须是 -1（与 action_validator 保持一致）
+                    available_actions.append((action_type_value, -1))
 
         # 如果没有可用动作，返回默认
         if len(available_actions) == 0:
-            return (ActionType.PASS.value, 0)
+            return ActionType.PASS.value, 1
 
         # 随机选择一个动作
         return tuple(available_actions[np.random.choice(len(available_actions))])

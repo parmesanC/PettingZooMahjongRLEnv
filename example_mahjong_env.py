@@ -551,6 +551,10 @@ class WuhanMahjongEnv(AECEnv):
         # 验证parameter
         if parameter < -1 or parameter >= self.PARAM_SPACE:
             raise ValueError(f"Invalid parameter: {parameter}")
+
+        # 对于WIN动作，强制参数为-1（与action_validator保持一致）
+        if action_type == ActionType.WIN.value:
+            parameter = -1
         
         return MahjongAction(ActionType(action_type), parameter)
 

@@ -243,10 +243,9 @@ class PlayerDecisionState(GameState):
 
         win_checker = WuhanMahjongWinChecker(context)
 
-        # 构建临时手牌（包含刚摸到的牌）
+        # 构建临时手牌
+        # 注意：last_drawn_tile 在 DRAWING 状态已经添加到 hand_tiles 中了，不需要再次添加
         temp_hand = current_player_data.hand_tiles.copy()
-        if context.last_drawn_tile is not None:
-            temp_hand.append(context.last_drawn_tile)
 
         # 创建临时玩家对象
         temp_player = PlayerData(

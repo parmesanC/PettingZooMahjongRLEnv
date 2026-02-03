@@ -7,3 +7,15 @@ websockets>=12.0
 numpy>=1.24.0
 gymnasium>=0.28.0
 pettingzoo>=1.24.0
+
+# DRL 依赖（NFSP + MAPPO + Transformer）
+torch>=2.0.0
+torchvision>=0.15.0
+torchaudio>=2.0.0
+
+# 可选：用于日志和可视化
+tensorboard>=2.13.0
+wandb>=0.15.0
+
+# 可选：用于性能优化
+numba>=0.57.0

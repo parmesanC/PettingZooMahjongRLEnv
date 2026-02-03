@@ -232,14 +232,7 @@ class ActionValidator:
             if tile in self.special_tiles:
                 continue
 
-            # 检查该牌是否已全部用于副露
-            # 计算手牌中该牌的数量和副露中该牌的数量
-            hand_count = temp_hand.count(tile)
-            meld_count = sum(meld.tiles.count(tile) for meld in current_player.melds)
-
-            # 只有当手牌中的牌数多于副露中的牌数时，才允许打出
-            if hand_count > meld_count:
-                available_actions.append(MahjongAction(ActionType.DISCARD, tile))
+            available_actions.append(MahjongAction(ActionType.DISCARD, tile))
 
         # 2. 检测暗杠（手牌中有4张相同的牌）
         tile_counts = Counter(temp_hand)

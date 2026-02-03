@@ -181,9 +181,11 @@ class ProcessMeldState(GameState):
         # 从手牌移除两张牌
         count = 0
         for tile in player.hand_tiles[:]:  # 遍历副本
-            if tile == discard_tile and count < 2:
+            if tile == discard_tile:
                 player.hand_tiles.remove(tile)
                 count += 1
+            if count >= 2:
+                break
         
         # 添加到副露
         meld = Meld(
