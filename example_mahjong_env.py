@@ -475,6 +475,25 @@ class WuhanMahjongEnv(AECEnv):
         if terminated:
             self._update_round_info()
 
+            # 计算所有玩家的最终得分作为 reward
+            if self.context.final_scores:
+                # 将实际分数归一化为 reward（除以100使范围在 [-5, +5]）
+                for i, score in enumerate(self.context.final_scores):
+                    agent_name = f"player_{i}"
+                    self.rewards[agent_name] = score / 100.0
+            else:
+                # 兼容：如果没有final_scores，使用旧的简化逻辑
+                if self.context.is_win:
+                    for agent in self.possible_agents:
+                        agent_idx = self.agents_name_mapping[agent]
+                        if agent_idx in self.context.winner_ids:
+                            self.rewards[agent] = 1.0
+                        else:
+                            self.rewards[agent] = -1.0
+                else:
+                    for agent in self.possible_agents:
+                        self.rewards[agent] = 0.0
+
             # 记录游戏结束
             if self.logger and not self._game_logged:
                 result = {
