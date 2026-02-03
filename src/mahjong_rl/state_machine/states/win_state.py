@@ -108,7 +108,15 @@ class WinState(GameState):
             if win_result.can_win:
                 # 计算分数
                 score_list = score_calculator.settle(win_result, context)
-                # 保存完整分数列表到 context（新增）
-                context.final_scores = score_list
-                # 同时保留赢家得分（兼容旧逻辑）
-                player.fan_count = max(score_list)
+                # 验证分数列表格式
+                if isinstance(score_list, list) and len(score_list) == 4:
+                    # 保存完整分数列表到 context（新增）
+                    context.final_scores = score_list
+                    # 同时保留赢家得分（兼容旧逻辑）
+                    player.fan_count = max(score_list)
+                else:
+                    # 分数列表格式异常，设置默认值
+                    context.final_scores = [0.0, 0.0, 0.0, 0.0]
+            else:
+                # 意外情况：在WinState但win_result.can_win为False
+                context.final_scores = [0.0, 0.0, 0.0, 0.0]
