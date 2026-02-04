@@ -114,9 +114,19 @@ class WaitRobKongState(GameState):
             ValueError: 如果动作类型不是 WIN 或 PASS
             ValueError: 如果玩家不在 active_responders 列表中却尝试抢杠
         """
-        # 如果没有玩家能抢杠，直接执行补杠
-        if not context.active_responders:
-            return self._check_rob_kong_result(context)
+        # 【新增】优先处理自动跳过场景
+        # 当 should_auto_skip() 返回 True 时，状态机会调用 step(context, 'auto')
+        if action == 'auto':
+            if not context.active_responders:
+                # 没有玩家能抢杠，直接执行补杠逻辑
+                return self._check_rob_kong_result(context)
+            # 有响应者时，不应该用 'auto' 调用
+            # （正常流程由状态机在 enter 后检查 should_auto_skip）
+            raise ValueError(
+                f"Unexpected 'auto' action with active responders. "
+                f"State machine should skip this state via should_auto_skip() "
+                f"when active_responders is empty."
+            )
 
         # 获取当前响应者
         if context.active_responder_idx >= len(context.active_responders):
@@ -126,33 +136,28 @@ class WaitRobKongState(GameState):
         current_responder = context.active_responders[context.active_responder_idx]
 
         # 处理当前玩家的响应
-        if action == 'auto':
-            # 如果是自动模式，默认PASS
-            response_action = MahjongAction(ActionType.PASS, -1)
-        else:
-            # 验证动作类型
-            if not isinstance(action, MahjongAction):
+        if not isinstance(action, MahjongAction):
+            raise ValueError(
+                f"WaitRobKongState expects MahjongAction or 'auto', got {type(action).__name__}"
+            )
+
+        response_action = action
+
+        # 只允许 WIN 或 PASS 动作
+        if response_action.action_type not in [ActionType.WIN, ActionType.PASS]:
+            raise ValueError(
+                f"Only WIN or PASS actions allowed in WAIT_ROB_KONG state, "
+                f"got {response_action.action_type.name}"
+            )
+
+        # 验证抢杠条件（防御性检查）
+        if response_action.action_type == ActionType.WIN:
+            if current_responder not in context.active_responders:
                 raise ValueError(
-                    f"WaitRobKongState expects MahjongAction or 'auto', got {type(action).__name__}"
+                    f"Player {current_responder} cannot rob kong: "
+                    f"not in active_responders list. "
+                    f"Current hand: {context.players[current_responder].hand_tiles}"
                 )
-
-            response_action = action
-
-            # 只允许 WIN 或 PASS 动作
-            if response_action.action_type not in [ActionType.WIN, ActionType.PASS]:
-                raise ValueError(
-                    f"Only WIN or PASS actions allowed in WAIT_ROB_KONG state, "
-                    f"got {response_action.action_type.name}"
-                )
-
-            # 验证抢杠条件（防御性检查）
-            if response_action.action_type == ActionType.WIN:
-                if current_responder not in context.active_responders:
-                    raise ValueError(
-                        f"Player {current_responder} cannot rob kong: "
-                        f"not in active_responders list. "
-                        f"Current hand: {context.players[current_responder].hand_tiles}"
-                    )
 
         # 记录响应
         context.pending_responses[current_responder] = response_action
@@ -336,3 +341,25 @@ class WaitRobKongState(GameState):
         context.current_player_idx = player_id
         context.is_kong_draw = True
         return GameStateType.DRAWING_AFTER_GONG
+
+    def should_auto_skip(self, context: GameContext) -> bool:
+        """
+        检查是否应该自动跳过此状态
+
+        如果没有玩家可以抢杠和（active_responders 为空），则自动跳过。
+        这允许状态机在 transition_to() 中自动推进到下一个状态。
+
+        设计意图：
+        - 避免在 enter() 中执行状态转换逻辑
+        - 由状态机统一处理自动跳过
+        - 保持 enter() 的单一职责（初始化）
+        - 与 WaitResponseState 保持一致的设计模式
+
+        Args:
+            context: 游戏上下文
+
+        Returns:
+            True 如果没有玩家能抢杠和（应该自动跳过）
+            False 如果有玩家需要决策
+        """
+        return len(context.active_responders) == 0
