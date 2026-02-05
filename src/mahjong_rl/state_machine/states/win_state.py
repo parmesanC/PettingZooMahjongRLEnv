@@ -56,6 +56,11 @@ class WinState(GameState):
         """
         context.current_state = GameStateType.WIN
         context.is_win = True
+
+        # 设置玩家的 is_win 标志（用于分数计算）
+        for winner_id in context.winner_ids:
+            context.players[winner_id].is_win = True
+
         # 终端状态不需要生成观测和动作掩码
         context.observation = None
         context.action_mask = None

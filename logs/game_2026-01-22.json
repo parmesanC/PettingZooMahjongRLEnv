@@ -1,0 +1,7 @@
+{"timestamp": "2026-01-22T11:43:55.238212Z", "level": "INFO", "type": "game_start", "game_id": "game_20260122_114355_2cf8f08e", "data": {"game_id": "game_20260122_114355_2cf8f08e", "config": {"seed": 42, "training_phase": 3, "num_players": 4}}}
+{"timestamp": "2026-01-22T11:43:55.239214Z", "level": "INFO", "type": "state_transition", "game_id": "game_20260122_114355_2cf8f08e", "data": {"from_state": null, "to_state": "INITIAL", "current_player": 0}}
+{"timestamp": "2026-01-22T11:43:55.239214Z", "level": "INFO", "type": "state_transition", "game_id": "game_20260122_114355_2cf8f08e", "data": {"from_state": "INITIAL", "to_state": "PLAYER_DECISION", "current_player": 0}}
+{"timestamp": "2026-01-22T11:43:55.239214Z", "level": "INFO", "type": "action", "game_id": "game_20260122_114355_2cf8f08e", "data": {"player_id": 0, "action_type": "DISCARD", "action_parameter": 0, "state": "PLAYER_DECISION"}}
+{"timestamp": "2026-01-22T11:43:55.239214Z", "level": "INFO", "type": "state_transition", "game_id": "game_20260122_114355_2cf8f08e", "data": {"from_state": "PLAYER_DECISION", "to_state": "DISCARDING", "current_player": 0}}
+{"timestamp": "2026-01-22T11:43:55.240214Z", "level": "INFO", "type": "action", "game_id": "game_20260122_114355_2cf8f08e", "data": {"player_id": 0, "action_type": "DISCARD", "action_parameter": 0, "state": "DISCARDING"}}
+{"timestamp": "2026-01-22T11:43:55.241214Z", "level": "INFO", "type": "action", "game_id": "game_20260122_114355_2cf8f08e", "data": {"player_id": 0, "action_type": "DISCARD", "action_parameter": 0, "state": "DISCARDING"}}

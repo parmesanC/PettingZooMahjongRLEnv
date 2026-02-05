@@ -26,7 +26,18 @@
       "Bash(git -C \"D:\\\\DATA\\\\Python_Project\\\\Code\\\\PettingZooRLENVMahjong\" show a826af4)",
       "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\condabin\\\\conda.bat\" activate PettinZooRLMahjong)",
       "Bash(git -C \"D:\\\\DATA\\\\Python_Project\\\\Code\\\\PettingZooRLENVMahjong\" diff 62bf4c2 a826af4 --stat)",
-      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\condabin\\\\conda.bat\" activate PettingZooRLMahjong)"
+      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\condabin\\\\conda.bat\" activate PettingZooRLMahjong)",
+      "Bash(git -C \"D:\\\\DATA\\\\Python_Project\\\\Code\\\\PettingZooRLENVMahjong\" show:*)",
+      "Bash(git -C \"D:\\\\DATA\\\\Python_Project\\\\Code\\\\PettingZooRLENVMahjong\" log:*)",
+      "Bash(git -C \"D:\\\\DATA\\\\Python_Project\\\\Code\\\\PettingZooRLENVMahjong\" diff b27d615..f68f65a --stat)",
+      "Skill(superpowers:executing-plans)",
+      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLMahjong\\\\python.exe\":*)",
+      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLMahjong\\\\python.exe\" -c \"import gymnasium; import torch; import pytest; print\\(''所有包导入成功''\\)\")",
+      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLMahjong\\\\python.exe\" -c \"from tests.scenario.executor import YELLOW, GREEN; print\\(repr\\(YELLOW\\), repr\\(GREEN\\)\\)\")",
+      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLMahjong\\\\python.exe\" -m pytest:*)",
+      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLMahjong\\\\python.exe\" -m pytest tests/integration/test_score_display.py -v)",
+      "Skill(superpowers:test-driven-development)",
+      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLMahjong\\\\python.exe\" test_score_calc.py)"
     ]
   }
 }

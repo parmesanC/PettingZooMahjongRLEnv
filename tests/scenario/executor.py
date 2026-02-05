@@ -245,15 +245,13 @@ class TestExecutor:
         result = []
         for meld in player.melds:
             try:
-                # 获取动作类型名称（兼容 enum 和 int）
+                # 获取动作类型（action_type 已经是 ActionType 枚举）
                 action = meld.action_type.action_type
-                if isinstance(action, int):
-                    action = ActionType(action)
                 action_name = action.name
 
-                # 获取第一张牌的名称（如果有的话）
+                # 获取第一张牌的名称（需要先转换为 Tiles 枚举）
                 if meld.tiles and len(meld.tiles) > 0:
-                    tile_name = self.visualizer.format_tile(meld.tiles[0])
+                    tile_name = self.visualizer.format_tile(Tiles(meld.tiles[0]))
                 else:
                     tile_name = ""
 
@@ -478,6 +476,7 @@ class TestExecutor:
             'discard_pile': context.discard_pile[-10:] if context.discard_pile else [],  # 最后10张
             'player_hand_counts': [len(p.hand_tiles) for p in context.players],
             'winner_ids': context.winner_ids if hasattr(context, 'winner_ids') else [],
+            'final_scores': context.final_scores if hasattr(context, 'final_scores') else [],
         }
 
     def _apply_custom_initialization(self) -> None:

@@ -201,7 +201,7 @@ def calculate_wall_scenario2_soft_win():
     p3 = [2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15]  # 13张
 
     # 游戏流程中被摸走的牌（按顺序）
-    drawn_tiles = [33]  # 玩家1摸的牌（任意牌）
+    drawn_tiles = [0, 33]  # 玩家1摸的牌（任意牌）
 
     # 杠后从牌尾摸的牌
     gong_drawn_tiles = [15]  # 玩家0赖子杠后从牌尾摸的牌
@@ -254,44 +254,48 @@ def test_scenario_2_soft_win_discard():
             'hands': {
                 0: [0, 0, 1, 2, 3, 4, 5, 6, 7, 15, 24, 24, 24, 26],  # 庄家14张
                 1: [8, 10, 12, 14, 16, 25, 26, 27, 28, 29, 30, 31, 32],
-                2: [2, 2, 9, 11, 13, 17, 18, 19, 20, 21, 22, 23, 26],
-                3: [2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+                2: [1, 1, 9, 11, 13, 17, 18, 19, 20, 21, 22, 23, 32],
+                3: [0, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14],
             },
             'wall': wall,
             'special_tiles': {'lazy': 15, 'skins': [14, 13]},
         })
         # 步骤1：玩家0 赖子杠（打出赖子15）→ 从牌尾摸15 → PLAYER_DECISION
         .step(1, "玩家0 赖子杠（打出赖子15）")
-            .action(0, ActionType.KONG_LAZY, 15)
+            .action(0, ActionType.KONG_LAZY, 0)
 
         # 步骤2：玩家0 出2（3万）→ WAITING_RESPONSE
-        .step(2, "玩家0 出2（3万）")
-            .action(0, ActionType.DISCARD, 2)
+        .step(2, "玩家0 出1（2万）")
+            .action(0, ActionType.DISCARD, 1)
 
-        # 步骤3：玩家2 碰2（3万）→ PROCESSING_MELD → PLAYER_DECISION(玩家2)
-        .step(3, "玩家2 碰2（3万）")
-            .action(2, ActionType.PONG, 2)
+        # 步骤3：玩家2 碰2（3万）→ PROCESSING_MELD → MELD_DECISION(玩家2)
+        .step(3, "玩家2 碰1（2万）")
+            .action(2, ActionType.PONG, 0)
 
-        # 步骤4：玩家2 出1（2万）→ WAITING_RESPONSE
-        .step(4, "玩家2 出1（2万）")
-            .action(2, ActionType.DISCARD, 1)
+        # 步骤4：玩家2 出32（发财）→ PLAYER_DECISION(玩家3)
+        .step(4, "玩家2 出32（发财）")
+            .action(2, ActionType.DISCARD, 32)
+
+        # 步骤5：玩家3 出0（1万）→ WAITING_RESPONSE
+        .step(5, "玩家3 出0（1万）")
+            .action(2, ActionType.DISCARD, 0)
 
         # 步骤5：玩家0 碰1（2万）完成开口 → PROCESSING_MELD → PLAYER_DECISION(玩家0)
-        .step(5, "玩家0 碰1（2万）完成开口")
-            .action(0, ActionType.PONG, 1)
+        .step(5, "玩家0 碰0（1万）完成开口")
+            .action(0, ActionType.PONG, 0)
 
         # 步骤6：玩家0 出26（9筒）听牌 → WAITING_RESPONSE → 自动跳过 → DRAWING → PLAYER_DECISION(玩家1)
         .step(6, "玩家0 出26（9筒）听牌")
             .action(0, ActionType.DISCARD, 26)
 
         # 步骤7：玩家1 出26（9筒）→ WAITING_RESPONSE
-        .step(7, "玩家1 出26（9筒）")
-            .action(1, ActionType.DISCARD, 26)
+        .step(7, "玩家1 出25（8筒）")
+            .action(1, ActionType.DISCARD, 25)
 
         # 步骤8：玩家0 接炮软胡 → WIN
         .step(8, "玩家0 接炮软胡")
             .action(0, ActionType.WIN, -1)
-            .verify("检查手牌", lambda ctx: print(f"玩家0手牌={sorted(ctx.players[0].hand_tiles)}, melds={ctx.players[0].melds}, 开口次数={ctx.players[0].exposure_count}") or True)
+            .verify("检查手牌", lambda ctx: print(f"玩家0手牌={sorted(ctx.players[0].hand_tiles)}, melds={ctx.players[0].melds}, has_opened={ctx.players[0].has_opened}") or True)
             .expect_state(GameStateType.WIN)
 
         .run()
@@ -318,22 +322,24 @@ def calculate_wall_scenario3_kong_bloom():
     杠上开花：杠后补牌自摸胡牌
     """
     # 初始手牌
-    p0 = [0, 0, 0, 10, 10, 13, 13, 3, 4, 5, 20, 24, 24, 26]  # 14张，庄家
-    p1 = [1, 8, 12, 14, 16, 27, 28, 29, 30, 31, 32, 33, 25]  # 13张
+    p0 = [0, 0, 0, 10, 10, 13, 16, 3, 4, 5, 20, 24, 24, 26]  # 14张，庄家
+    p1 = [1, 8, 12, 14, 16, 27, 28, 29, 30, 31, 32, 33, 24]  # 13张
     p2 = [9, 11, 15, 17, 18, 19, 21, 22, 23, 25, 26, 26, 24]  # 13张
     p3 = [2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15]  # 13张
 
     # 游戏流程中被摸走的牌
-    drawn_tiles = [25, 10, 24]  # p1摸25, p0摸10(补杠), p0摸24(开花)
+    drawn_tiles = [25, 10, 2, 14, 21, 10]
+
+    gong_drawn_tiles = [16, 33]
 
     # 计算牌墙
-    all_used = p0 + p1 + p2 + p3 + drawn_tiles
+    all_used = p0 + p1 + p2 + p3 + drawn_tiles + gong_drawn_tiles
     unused_wall = [i for i in range(34)] * 4
     for tile in all_used:
         if tile in unused_wall:
             unused_wall.remove(tile)
 
-    wall = drawn_tiles + unused_wall
+    wall = drawn_tiles + unused_wall + gong_drawn_tiles
     return wall
 
 
@@ -362,8 +368,8 @@ def test_scenario_3_kong_bloom():
             'dealer_idx': 0,
             'current_player_idx': 0,
             'hands': {
-                0: [0, 0, 0, 10, 10, 13, 13, 3, 4, 5, 20, 24, 24, 26],
-                1: [1, 8, 12, 14, 16, 27, 28, 29, 30, 31, 32, 33, 25],
+                0: [0, 0, 0, 10, 10, 13, 16, 3, 4, 5, 20, 24, 24, 26],
+                1: [1, 8, 12, 14, 16, 27, 28, 29, 30, 31, 32, 33, 24],
                 2: [9, 11, 15, 17, 18, 19, 21, 22, 23, 25, 26, 26, 24],
                 3: [2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15],
             },
@@ -374,52 +380,64 @@ def test_scenario_3_kong_bloom():
         .step(1, "玩家0出26（9筒）")
             .action(0, ActionType.DISCARD, 26)
 
-        # 步骤2-4：玩家1,2,3依次PASS
-        .step(2, "玩家1 PASS")
-            .action(1, ActionType.PASS)
-        .step(3, "玩家2 PASS")
+        # 步骤2：玩家2 PASS
+        .step(2, "玩家2 PASS")
             .action(2, ActionType.PASS)
-        .step(4, "玩家3 PASS")
-            .action(3, ActionType.PASS)
 
-        # 步骤5：玩家1摸牌后出1（2万）
-        .step(5, "玩家1摸牌后出1（2万）")
+        # 步骤3：玩家1摸牌后出1（2万）
+        .step(3, "玩家1摸牌后出24（7筒）")
+            .action(1, ActionType.DISCARD, 24)
+
+        # 步骤4：玩家2 PASS，玩家0 PONG 24（7筒）完成开口
+        .step(4, "玩家2 PASS")
+            .action(2, ActionType.PASS)
+
+        # 步骤5：玩家0 PONG 24（7筒）完成开口
+        .step(5, "玩家0 PONG 24（7筒）完成开口")
+            .action(0, ActionType.PONG, 0)
+
+        # 步骤6：玩家0出20（3筒）
+        .step(6, "玩家0出20（3筒）")
+            .action(0, ActionType.DISCARD, 20)
+
+        # 步骤7：玩家1出10（2条）
+        .step(7, "玩家1出10（2条）")
+            .action(1, ActionType.DISCARD, 10)
+
+        # 步骤8：玩家2 PASS
+        .step(8, "玩家2 PASS")
+            .action(2, ActionType.PASS)
+
+        # 步骤8：玩家0 PONG 10（2条）
+        .step(8, "玩家0 PONG 10（2条）")
+            .action(0, ActionType.PONG, 0)
+
+        # 步骤9：玩家0 出13 (5条)进行皮子杠
+        .step(9, "玩家0 出13(5条)进行皮子杠")
+            .action(0, ActionType.KONG_SKIN, 13)
+
+        # 步骤10：玩家0 出33 (白板)
+        .step(10, "玩家0 出33(白板)")
+            .action(0, ActionType.DISCARD, 33)
+
+        # 步骤11：玩家1 出1 (2万)
+        .step(11, "玩家1 出1(2万)")
             .action(1, ActionType.DISCARD, 1)
 
-        # 步骤6-8：玩家2,3依次PASS，玩家0 PONG
-        .step(6, "玩家2 PASS")
-            .action(2, ActionType.PASS)
-        .step(7, "玩家3 PASS")
-            .action(3, ActionType.PASS)
-        .step(8, "玩家0 PONG 1（1万）完成开口")
-            .action(0, ActionType.PONG, 1)
+        # 步骤12：玩家2 出25 (8筒)
+        .step(12, "玩家2 出25(8筒)")
+            .action(2, ActionType.DISCARD, 25)
 
-        # 步骤9-12：玩家0出20（3筒），玩家1,2,3依次PASS
-        .step(9, "玩家0出20（3筒）")
-            .action(0, ActionType.DISCARD, 20)
-        .step(10, "玩家1 PASS")
-            .action(1, ActionType.PASS)
-        .step(11, "玩家2 PASS")
-            .action(2, ActionType.PASS)
-        .step(12, "玩家3 PASS")
-            .action(3, ActionType.PASS)
+        # 步骤13：玩家3 出7 (8万)
+        .step(13, "玩家3 出7(8万)")
+            .action(3, ActionType.DISCARD, 7)
 
-        # 步骤13-16：玩家1出10（2条），玩家2,3,0依次响应（0 PONG）
-        .step(13, "玩家1出10（2条）")
-            .action(1, ActionType.DISCARD, 10)
-        .step(14, "玩家2 PASS")
-            .action(2, ActionType.PASS)
-        .step(15, "玩家3 PASS")
-            .action(3, ActionType.PASS)
-        .step(16, "玩家0 PONG 10（2条）")
-            .action(0, ActionType.PONG, 10)
-
-        # 步骤17：玩家0补杠10（2条）
-        .step(17, "玩家0补杠10（2条）")
+        # 步骤14：玩家0补杠10（2条）
+        .step(14, "玩家0补杠10（2条）")
             .action(0, ActionType.KONG_SUPPLEMENT, 10)
 
-        # 步骤18：玩家0摸24（8筒）杠上开花
-        .step(18, "玩家0摸24（8筒）杠上开花")
+        # 步骤15：玩家0摸16（8条）杠上开花
+        .step(15, "玩家0摸16（8条）杠上开花")
             .action(0, ActionType.WIN, -1)
 
         .run()
@@ -447,8 +465,8 @@ def calculate_wall_scenario4_all_melded():
     p2 = [9, 11, 13, 15, 17, 18, 19, 20, 21, 22, 23, 26, 26]
     p3 = [2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 
-    drawn_tiles = [0, 1, 24, 26, 0, 1, 6, 8, 9, 10, 11, 12, 13, 24, 26]
-    gong_drawn_tiles = [0, 1, 24, 26]
+    drawn_tiles = [0, 11, 24, 0, 1, 6, 8, 9, 10, 11, 12, 13]
+    gong_drawn_tiles = [0, 1, 24]
 
     all_used = p0 + p1 + p2 + p3 + drawn_tiles + gong_drawn_tiles
     unused_wall = [i for i in range(34)] * 4
@@ -494,73 +512,87 @@ def test_scenario_4_all_melded():
         .step(1, "玩家0出26")
             .action(0, ActionType.DISCARD, 26)
 
-        # 步骤2：玩家1 出0（1万）
-        .step(2, "玩家1出0")
-            .action(1, ActionType.DISCARD, 0)
+        # 步骤2：玩家2 碰26（9筒）
+        .step(2, "玩家2碰26")
+            .action(2, ActionType.PONG, 0)
 
-        # 步骤3：玩家0 明杠0（1万）完成开口
-        .step(3, "玩家0明杠0")
-            .action(0, ActionType.KONG_EXPOSED, 0)
-
-        # 步骤4：玩家0 出2（3万）
-        .step(4, "玩家0出2")
-            .action(0, ActionType.DISCARD, 2)
-
-        # 步骤5-7：玩家1,2,3 依次出牌
-        .step(5, "玩家1出8")
-            .action(1, ActionType.DISCARD, 8)
-        .step(6, "玩家2出9")
+        # 步骤3：玩家2 出9（1条）
+        .step(3, "玩家2出9")
             .action(2, ActionType.DISCARD, 9)
-        .step(7, "玩家3出10")
-            .action(3, ActionType.DISCARD, 10)
 
-        # 步骤8：玩家0 出1（2万）
-        .step(8, "玩家0出1")
-            .action(0, ActionType.DISCARD, 1)
+        # 步骤4：玩家3 pass
+        .step(4, "玩家3 PASS")
+            .action(3, ActionType.PASS)
 
-        # 步骤9：玩家2 出1（2万）
-        .step(9, "玩家2出1")
-            .action(2, ActionType.DISCARD, 1)
+        # 步骤5：玩家3 出0（1万）
+        .step(5, "玩家3出0")
+            .action(3, ActionType.DISCARD, 0)
 
-        # 步骤10：玩家0 明杠1（2万）
-        .step(10, "玩家0明杠1")
-            .action(0, ActionType.KONG_EXPOSED, 1)
+        # 步骤6：玩家0 碰0（1万）
+        .step(6, "玩家0碰0")
+            .action(0, ActionType.PONG, 0)
 
-        # 步骤11：玩家0 出6（7万）
-        .step(11, "玩家0出6")
-            .action(0, ActionType.DISCARD, 6)
-
-        # 步骤12-14：玩家1,2,3 依次出牌
-        .step(12, "玩家1出11")
-            .action(1, ActionType.DISCARD, 11)
-        .step(13, "玩家2出12")
-            .action(2, ActionType.DISCARD, 12)
-        .step(14, "玩家3出13")
-            .action(3, ActionType.DISCARD, 13)
-
-        # 步骤15：玩家0 出24（8筒）
-        .step(15, "玩家0出24")
-            .action(0, ActionType.DISCARD, 24)
-
-        # 步骤16：玩家1 出24（8筒）
-        .step(16, "玩家1出24")
-            .action(1, ActionType.DISCARD, 24)
-
-        # 步骤17：玩家0 明杠24（8筒）
-        .step(17, "玩家0明杠24")
-            .action(0, ActionType.KONG_EXPOSED, 24)
-
-        # 步骤18：玩家0 出26（9筒），手牌仅剩26
-        .step(18, "玩家0出26")
+        # 步骤7：玩家0 出26（9筒）
+        .step(7, "玩家0出26")
             .action(0, ActionType.DISCARD, 26)
 
-        # 步骤19：玩家1 出26（9筒）
-        .step(19, "玩家1出26")
-            .action(1, ActionType.DISCARD, 26)
+        # 步骤8：玩家1 出8（9万）
+        .step(8, "玩家1出8")
+            .action(1, ActionType.DISCARD, 8)
 
-        # 步骤20：玩家0 接炮全求人
-        .step(20, "玩家0接炮全求人")
-            .action(0, ActionType.WIN, -1)
+        # 步骤9：玩家2 出24（7筒）
+        .step(9, "玩家2出24")
+            .action(2, ActionType.DISCARD, 24)
+        # 步骤10：玩家0 碰24（7筒）
+        .step(10, "玩家0碰24")
+            .action(0, ActionType.PONG, 0)
+        # 步骤11：玩家0 出2（3万）
+        .step(11, "玩家0出2")
+            .action(0, ActionType.DISCARD, 2)
+
+        # 步骤12：玩家1 出33（白板）
+        .step(12, "玩家1出33")
+            .action(1, ActionType.DISCARD, 33)
+
+        # 步骤13-14：玩家2,3 依次出牌
+        .step(13, "玩家2出23")
+            .action(2, ActionType.DISCARD, 23)
+        .step(14, "玩家3出2")
+            .action(3, ActionType.DISCARD, 2)
+
+        # 步骤14：玩家0 左吃2（3万）
+        .step(14, "玩家0吃2")
+            .action(0, ActionType.CHOW, 0)
+
+        # 步骤15：玩家0 出5（6万）
+        .step(15, "玩家0出5")
+            .action(0, ActionType.DISCARD, 5)
+
+        # 步骤16-18：玩家1,2,3 依次出32（发财）,22（5筒）,8（9万）
+        .step(16, "玩家1出32")
+            .action(1, ActionType.DISCARD, 32)
+        .step(17, "玩家2出22")
+            .action(2, ActionType.DISCARD, 22)
+        .step(18, "玩家3出8")
+            .action(3, ActionType.DISCARD, 8)
+
+        # 步骤19-20：玩家0先吃8（9万） 再出1（2万），手牌仅剩1
+        .step(19, "玩家0吃8")
+            .action(0, ActionType.CHOW, 2)
+        .step(20, "玩家0出1")
+            .action(0, ActionType.DISCARD, 1)
+
+        # 步骤21：玩家1 出26（9筒）
+        .step(21, "玩家1出29")
+            .action(1, ActionType.DISCARD, 29)
+
+        # 步骤22：玩家2 出1（2万）
+        .step(22, "玩家2出1")
+            .action(2, ActionType.DISCARD, 1)
+
+        # 步骤23：玩家0 接炮全求人
+        .step(23, "玩家0接炮全求人")
+            .action(0, ActionType.WIN)
             .expect_state(GameStateType.WIN)
 
         .run()
