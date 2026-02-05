@@ -15,7 +15,7 @@ from typing import Optional
 
 from src.mahjong_rl.core.GameData import GameContext, ActionRecord
 from src.mahjong_rl.core.PlayerData import PlayerData, Meld
-from src.mahjong_rl.core.constants import GameStateType, ActionType
+from src.mahjong_rl.core.constants import GameStateType, ActionType, WinWay
 from src.mahjong_rl.core.mahjong_action import MahjongAction
 from src.mahjong_rl.observation.builder import IObservationBuilder
 from src.mahjong_rl.rules.base import IRuleEngine
@@ -128,6 +128,9 @@ class GongState(GameState):
 
                 # 清理临时变量
                 context.pending_kong_action = None
+
+                # 设置胡牌场景为抢杠和
+                context.win_way = WinWay.ROB_KONG.value
 
                 # 转到等待抢杠和状态
                 return GameStateType.WAIT_ROB_KONG

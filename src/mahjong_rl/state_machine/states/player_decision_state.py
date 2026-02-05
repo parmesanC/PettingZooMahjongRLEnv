@@ -266,7 +266,7 @@ class PlayerDecisionState(GameState):
         # 设置游戏状态为和牌
         context.is_win = True
         context.winner_ids = [context.current_player_idx]
-        context.win_way = WinWay.SELF_DRAW.value
+        # win_way 已在进入状态前设置，这里不需要再设置
 
         return GameStateType.WIN
     

@@ -85,17 +85,9 @@ class DrawingState(GameState):
 
         # 存储摸到的牌供PLAYER_DECISION状态使用
         context.last_drawn_tile = draw_tile
-        
-        # 检查是否杠上开花（如果是杠后摸牌）
-        if context.is_kong_draw:
-            context.win_way = WinWay.KONG_SELF_DRAW.value
-            # 检查是否胡牌
-            win_result = self._check_win(context, current_player)
-            if win_result.can_win:
-                context.winner_ids = [context.current_player_idx]
-                context.is_win = True
-                return GameStateType.WIN
-        
+
+        # 设置胡牌场景为自摸
+        context.win_way = WinWay.SELF_DRAW.value
         return GameStateType.PLAYER_DECISION
     
     def exit(self, context: GameContext) -> None:

@@ -17,7 +17,7 @@ from typing import Optional, Union
 import numpy as np
 
 from src.mahjong_rl.core.GameData import GameContext, ActionRecord
-from src.mahjong_rl.core.constants import GameStateType, ActionType
+from src.mahjong_rl.core.constants import GameStateType, ActionType, WinWay
 from src.mahjong_rl.core.mahjong_action import MahjongAction
 from src.mahjong_rl.observation.builder import IObservationBuilder
 from src.mahjong_rl.rules.base import IRuleEngine
@@ -116,6 +116,8 @@ class DiscardingState(GameState):
         # 清理临时变量
         context.pending_discard_tile = None
         
+        # 设置胡牌场景为点炮
+        context.win_way = WinWay.DISCARD.value
         return GameStateType.WAITING_RESPONSE
     
     def exit(self, context: GameContext) -> None:
