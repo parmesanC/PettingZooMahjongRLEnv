@@ -321,8 +321,12 @@ class ScenarioBuilder:
             if step_config not in self.context.steps:
                 self.context.steps.append(step_config)
 
-    def run(self) -> 'TestResult':
+    def run(self, verbose: bool = True, tile_format: str = "name") -> 'TestResult':
         """执行测试场景
+
+        Args:
+            verbose: 是否打印详细信息
+            tile_format: 牌显示格式，"name"（牌名）或 "number"（数字）
 
         Returns:
             TestResult 测试结果
@@ -332,5 +336,5 @@ class ScenarioBuilder:
         # 自动添加最后一个未添加的步骤
         self._add_pending_step()
 
-        executor = TestExecutor(self.context)
+        executor = TestExecutor(self.context, verbose=verbose, tile_format=tile_format)
         return executor.run()
