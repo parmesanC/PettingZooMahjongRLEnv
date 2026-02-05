@@ -266,6 +266,30 @@ class TestExecutor:
         timestamp = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
         self.state_history.append((state, timestamp))
 
+    # ==================== 动作验证方法 ====================
+
+    def _check_action_valid(self, action: tuple) -> bool:
+        """检查动作是否合法
+
+        Args:
+            action: (action_type_value, parameter) 元组
+        """
+        action_type, param = action
+        mahjong_action = MahjongAction(ActionType(action_type), param)
+
+        # 转换为 action index
+        try:
+            action_index = self.env._action_to_index(mahjong_action)
+        except (ValueError, AttributeError):
+            return False
+
+        # 检查 action_mask
+        mask = self.env.context.action_mask
+        if mask is None or action_index < 0 or action_index >= len(mask):
+            return False
+
+        return mask[action_index] == 1
+
     def _run_validations(self, step: StepConfig):
         """运行所有验证
 
