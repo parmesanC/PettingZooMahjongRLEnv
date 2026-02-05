@@ -25,15 +25,21 @@ class TestExecutor:
     执行测试场景，收集验证结果。
     """
 
-    def __init__(self, scenario: ScenarioContext):
+    def __init__(self, scenario: ScenarioContext, verbose: bool = True, tile_format: str = "name"):
         """初始化执行器
 
         Args:
             scenario: 测试场景配置
+            verbose: 是否打印详细信息
+            tile_format: 牌显示格式，"name"（牌名）或 "number"（数字）
         """
         self.scenario = scenario
         self.env = None
         self.result = TestResult(scenario_name=scenario.name, success=False)
+        self.verbose = verbose
+        self.tile_format = tile_format
+        self.visualizer = TileTextVisualizer()
+        self.state_history: List[Tuple[GameStateType, str]] = []
 
     def run(self) -> TestResult:
         """执行测试场景
