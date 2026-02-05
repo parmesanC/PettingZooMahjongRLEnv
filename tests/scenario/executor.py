@@ -259,6 +259,26 @@ class TestExecutor:
 
         return result
 
+    def _get_win_way_name(self) -> str:
+        """获取胡牌方式的中文名称
+
+        Returns:
+            胡牌方式名称，如 "自摸"、"点炮" 等
+        """
+        from src.mahjong_rl.core.constants import WinWay
+
+        win_way = self.env.context.win_way
+        if win_way is None:
+            return "未知"
+
+        way_map = {
+            WinWay.SELF_DRAW.value: "自摸",
+            WinWay.DISCARD.value: "点炮",
+            WinWay.KONG_ON_DRAW.value: "杠上开花",
+            WinWay.ROB_KONG.value: "抢杠和",
+        }
+        return way_map.get(win_way, "未知")
+
     # ==================== 打印方法 ====================
 
     def _print_game_state(self, step: StepConfig, is_before: bool = True):
