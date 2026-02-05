@@ -106,6 +106,10 @@ class TestExecutor:
             # 无论成功失败都创建快照
             self.result.final_context_snapshot = self._create_snapshot()
 
+            # 显示游戏分数（如果游戏结束）
+            if self.verbose:
+                self._print_scores()
+
         except Exception as e:
             self.result.success = False
             self.result.failed_step = self.result.executed_steps + 1
@@ -240,22 +244,35 @@ class TestExecutor:
 
         result = []
         for meld in player.melds:
-            action_name = meld.action_type.action_type.name
-            tile_name = self.visualizer.format_tile(meld.tiles[0])
+            try:
+                # 获取动作类型名称（兼容 enum 和 int）
+                action = meld.action_type.action_type
+                if isinstance(action, int):
+                    action = ActionType(action)
+                action_name = action.name
 
-            # 根据动作类型格式化
-            if action_name == "CHOW":
-                result.append(f"吃: {tile_name}")
-            elif action_name == "PONG":
-                result.append(f"碰: {tile_name}")
-            elif action_name == "KONG_EXPOSED":
-                result.append(f"明杠: {tile_name}")
-            elif action_name == "KONG_CONCEALED":
-                result.append("暗杠")
-            elif action_name == "KONG_SUPPLEMENT":
-                result.append(f"补杠: {tile_name}")
-            else:
-                result.append(f"{action_name}: {tile_name}")
+                # 获取第一张牌的名称（如果有的话）
+                if meld.tiles and len(meld.tiles) > 0:
+                    tile_name = self.visualizer.format_tile(meld.tiles[0])
+                else:
+                    tile_name = ""
+
+                # 根据动作类型格式化
+                if action_name == "CHOW":
+                    result.append(f"吃: {tile_name}")
+                elif action_name == "PONG":
+                    result.append(f"碰: {tile_name}")
+                elif action_name == "KONG_EXPOSED":
+                    result.append(f"明杠: {tile_name}")
+                elif action_name == "KONG_CONCEALED":
+                    result.append("暗杠")
+                elif action_name == "KONG_SUPPLEMENT":
+                    result.append(f"补杠: {tile_name}")
+                else:
+                    result.append(f"{action_name}: {tile_name}")
+            except Exception:
+                # 如果格式化失败，返回一个通用描述
+                result.append("(牌组)")
 
         return result
 
@@ -274,10 +291,10 @@ class TestExecutor:
         way_map = {
             WinWay.SELF_DRAW.value: "自摸",
             WinWay.DISCARD.value: "点炮",
-            WinWay.KONG_ON_DRAW.value: "杠上开花",
+            WinWay.KONG_SELF_DRAW.value: "杠上开花",
             WinWay.ROB_KONG.value: "抢杠和",
         }
-        return way_map.get(win_way, "未知")
+        return way_map.get(int(win_way), "未知")
 
     # ==================== 打印方法 ====================
 
