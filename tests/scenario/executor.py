@@ -213,6 +213,59 @@ class TestExecutor:
                 return str(param)
         return str(param)
 
+    # ==================== 打印方法 ====================
+
+    def _print_game_state(self, step: StepConfig, is_before: bool = True):
+        """打印当前游戏状态
+
+        Args:
+            step: 步骤配置
+            is_before: True表示步骤开始前，False表示步骤执行后
+        """
+        prefix = "步骤执行前" if is_before else "步骤执行后"
+        print(f"\n{'='*60}")
+        print(f"步骤 {step.step_number}: {step.description} [{prefix}]")
+        print(f"{'='*60}")
+
+        context = self.env.context
+
+        # 当前状态和玩家
+        print(f"当前状态: {context.current_state.name}")
+        print(f"当前玩家: {context.current_player_idx}")
+
+        # 手牌
+        print(f"\n--- 手牌 ---")
+        for i, player in enumerate(context.players):
+            print(f"  玩家 {i}: {self._format_hand(player.hand_tiles)}")
+
+        # 弃牌堆（显示最后10张）
+        if context.discard_pile:
+            print(f"\n--- 弃牌堆 (最近10张) ---")
+            recent = context.discard_pile[-10:]
+            formatted_recent = [self._format_action_param(ActionType.DISCARD, t) for t in recent]
+            print(f"  [{', '.join(formatted_recent)}]")
+
+        # 牌墙数量
+        print(f"\n牌墙剩余: {len(context.wall)} 张")
+
+    def _print_action(self, player: int, action_type: ActionType, param: int, is_valid: bool):
+        """打印动作，非法动作用红色，参数使用牌名"""
+        formatted_param = self._format_action_param(action_type, param)
+        action_str = f"{action_type.name}({formatted_param})"
+
+        if is_valid:
+            print(f"  玩家 {player} 执行: {action_str}")
+        else:
+            print(f"  {RED}玩家 {player} 尝试: {action_str} - 非法动作!{RESET}")
+
+    # ==================== 状态记录方法 ====================
+
+    def _record_state(self):
+        """记录当前状态到历史"""
+        state = self.env.state_machine.current_state_type
+        timestamp = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        self.state_history.append((state, timestamp))
+
     def _run_validations(self, step: StepConfig):
         """运行所有验证
 
