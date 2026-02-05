@@ -160,24 +160,26 @@ class TestExecutor:
         # 6. 执行验证
         self._run_validations(step)
 
-    def _execute_action(self, step: StepConfig):
+    def _execute_action(self, step: StepConfig, is_valid_action: bool):
         """执行动作步骤
 
         Args:
             step: 步骤配置
+            is_valid_action: 动作是否合法
 
         Raises:
             AssertionError: 验证失败
         """
-        # 构造动作
-        action = (step.action_type.value, step.parameter)
+        # 打印动作（带颜色）
+        self._print_action(step.player, step.action_type, step.parameter, is_valid_action)
 
-        # 执行动作
-        obs, reward, terminated, truncated, info = self.env.step(action)
-
-        # 打印执行结果
-        print(f"  玩家 {step.player} 执行: {step.action_type.name}({step.parameter})")
-        print(f"  当前状态: {self.env.state_machine.current_state_type.name}")
+        # 只有合法动作才执行
+        if is_valid_action:
+            action = (step.action_type.value, step.parameter)
+            obs, reward, terminated, truncated, info = self.env.step(action)
+            print(f"  → 转移到状态: {self.env.state_machine.current_state_type.name}")
+        else:
+            print(f"  → 动作未执行")
 
     def _auto_advance(self, step: StepConfig):
         """自动推进步骤
