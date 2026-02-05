@@ -2,13 +2,21 @@
 场景测试框架 - 测试执行器
 
 负责执行配置好的测试场景，验证状态转换和游戏状态。
+增强版：支持详细日志输出、手牌格式化显示、动作合法性检测。
 """
 
-from typing import Optional
+from typing import Optional, List, Tuple
+import datetime
 from copy import deepcopy
 from tests.scenario.context import ScenarioContext, StepConfig, TestResult
-from src.mahjong_rl.core.constants import GameStateType, ActionType
+from src.mahjong_rl.core.constants import GameStateType, ActionType, Tiles
 from src.mahjong_rl.core.mahjong_action import MahjongAction
+from src.mahjong_rl.visualization.TileVisualization import TileTextVisualizer
+
+# ANSI 颜色代码
+RED = "\033[91m"
+GREEN = "\033[92m"
+RESET = "\033[0m"
 
 
 class TestExecutor:
