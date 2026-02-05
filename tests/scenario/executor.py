@@ -178,6 +178,41 @@ class TestExecutor:
         # 这里只需要验证当前状态
         print(f"  自动推进到: {self.env.state_machine.current_state_type.name}")
 
+    # ==================== 格式化方法 ====================
+
+    def _format_hand(self, hand_tiles: List[int]) -> str:
+        """格式化手牌显示
+
+        示例输出: [1万, 5万, 8条, 1筒, 2筒, 东, 南, 西, 北]
+        """
+        if self.tile_format == "name":
+            # 使用 TileTextVisualizer，不分组，得到 "1万 5万 8条..."
+            formatted = self.visualizer.format_hand(hand_tiles, group_by_suit=False)
+            # 替换空格为 ", " 并加上方括号
+            return "[" + ", ".join(formatted.split()) + "]"
+        else:
+            # 数字格式: [1, 5, 8, 19, 20, 28, 29, 30, 31]
+            return "[" + ", ".join(map(str, sorted(hand_tiles))) + "]"
+
+    def _format_action_param(self, action_type: ActionType, param: int) -> str:
+        """格式化动作参数，牌ID转为牌名"""
+        # 需要格式化牌名的动作类型
+        tile_actions = {
+            ActionType.DISCARD,
+            ActionType.KONG_SUPPLEMENT,
+            ActionType.KONG_CONCEALED,
+            ActionType.KONG_SKIN,
+            ActionType.KONG_LAZY,
+            ActionType.KONG_RED,
+        }
+
+        if action_type in tile_actions and param >= 0:
+            if self.tile_format == "name":
+                return self.visualizer.format_tile(Tiles(param))
+            else:
+                return str(param)
+        return str(param)
+
     def _run_validations(self, step: StepConfig):
         """运行所有验证
 
