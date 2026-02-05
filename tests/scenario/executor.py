@@ -314,6 +314,81 @@ class TestExecutor:
         # 牌墙数量
         print(f"\n牌墙剩余: {len(context.wall)} 张")
 
+    def _print_scores(self):
+        """打印游戏结束时的玩家分数和明细
+
+        只有在游戏结束（WIN 或 FLOW_DRAW）且有分数数据时才打印
+        """
+        context = self.env.context
+
+        # 只有在游戏结束且有分数时才打印
+        if not context.final_scores:
+            return
+
+        # 检查游戏是否结束
+        current_state = self.env.state_machine.current_state_type
+        if current_state not in [GameStateType.WIN, GameStateType.FLOW_DRAW]:
+            return
+
+        print(f"\n{'='*60}")
+        print(f"游戏结束 - 最终分数")
+        print(f"{'='*60}")
+
+        # 1. 显示每个玩家的最终得分
+        for i, score in enumerate(context.final_scores):
+            if score > 0:
+                print(f"  玩家 {i}: {GREEN}+{score}{RESET}")
+            elif score < 0:
+                print(f"  玩家 {i}: {RED}{score}{RESET}")
+            else:
+                print(f"  玩家 {i}: 0")
+
+        print()  # 空行
+
+        # 2. 显示获胜者或流局信息
+        if context.is_flush:
+            print(f"{YELLOW}流局{RESET}")
+        elif context.winner_ids:
+            winners = ", ".join(f"玩家 {w}" for w in context.winner_ids)
+            print(f"获胜者: {GREEN}{winners}{RESET}")
+
+            # 显示胡牌方式
+            win_way = self._get_win_way_name()
+            print(f"胡牌方式: {win_way}")
+
+        # 3. 显示庄家
+        if context.dealer_idx is not None:
+            print(f"庄家: 玩家 {context.dealer_idx}")
+
+        print()  # 空行
+
+        # 4. 显示每个玩家的牌组
+        for i, player in enumerate(context.players):
+            print(f"玩家 {i} 牌组:")
+
+            # 显示吃碰杠
+            melds = self._format_melds(i)
+            if melds:
+                for meld in melds:
+                    print(f"  - {meld}")
+            else:
+                print(f"  (无)")
+
+            # 显示特殊杠
+            pi_zi, lai_zi, hong_zhong = player.special_gangs
+            special_gangs = []
+            if pi_zi > 0:
+                special_gangs.append(f"皮子杠 x{pi_zi}")
+            if lai_zi > 0:
+                special_gangs.append(f"赖子杠 x{lai_zi}")
+            if hong_zhong > 0:
+                special_gangs.append(f"红中杠 x{hong_zhong}")
+
+            if special_gangs:
+                print(f"  特殊杠: {', '.join(special_gangs)}")
+
+        print(f"{'='*60}\n")
+
     # ==================== 动作验证方法 ====================
 
     def _run_validations(self, step: StepConfig):
