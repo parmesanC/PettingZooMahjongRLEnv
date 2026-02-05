@@ -289,22 +289,21 @@ class TestExecutor:
 
         Args:
             action: (action_type_value, parameter) 元组
+
+        Note:
+            这里只做简单的合法性检查，避免使用 action_mask（因为它在执行前可能未设置）。
+            真正的验证由环境执行。
         """
         action_type, param = action
-        mahjong_action = MahjongAction(ActionType(action_type), param)
 
-        # 转换为 action index
-        try:
-            action_index = self.env._action_to_index(mahjong_action)
-        except (ValueError, AttributeError):
-            return False
+        # 对于 DISCARD 动作，检查牌是否在手牌中
+        if action_type == ActionType.DISCARD.value:
+            current_player = self.env.context.players[self.env.context.current_player_idx]
+            return param in current_player.hand_tiles
 
-        # 检查 action_mask
-        mask = self.env.context.action_mask
-        if mask is None or action_index < 0 or action_index >= len(mask):
-            return False
-
-        return mask[action_index] == 1
+        # 对于其他动作，暂时返回 True（让环境自己验证）
+        # TODO: 可以添加更多动作类型的简单检查
+        return True
 
     def _run_validations(self, step: StepConfig):
         """运行所有验证
