@@ -5,9 +5,7 @@
 增强版：支持详细日志输出、手牌格式化显示、动作合法性检测。
 """
 
-from typing import Optional, List, Tuple
-import datetime
-from copy import deepcopy
+from typing import List
 from tests.scenario.context import ScenarioContext, StepConfig, TestResult
 from src.mahjong_rl.core.constants import GameStateType, ActionType, Tiles
 from src.mahjong_rl.core.mahjong_action import MahjongAction
@@ -16,6 +14,7 @@ from src.mahjong_rl.visualization.TileVisualization import TileTextVisualizer
 # ANSI 颜色代码
 RED = "\033[91m"
 GREEN = "\033[92m"
+YELLOW = "\033[93m"
 RESET = "\033[0m"
 
 
@@ -39,7 +38,6 @@ class TestExecutor:
         self.verbose = verbose
         self.tile_format = tile_format
         self.visualizer = TileTextVisualizer()
-        self.state_history: List[Tuple[GameStateType, str]] = []
 
     def run(self) -> TestResult:
         """执行测试场景
@@ -138,48 +136,46 @@ class TestExecutor:
         if self.verbose:
             self._print_game_state(step, is_before=True)
 
-        # 2. 检查动作合法性（如果是动作步骤）
-        is_valid_action = True
-        if step.is_action:
-            action = (step.action_type.value, step.parameter)
-            is_valid_action = self._check_action_valid(action)
-
-        # 3. 执行步骤
+        # 2. 执行步骤
         if step.is_auto:
             self._auto_advance(step)
         elif step.is_action:
-            self._execute_action(step, is_valid_action)
+            self._execute_action(step)
 
-        # 4. 记录状态转换
-        self._record_state()
-
-        # 5. 打印步骤执行后的状态
+        # 3. 打印步骤执行后的状态
         if self.verbose:
             self._print_game_state(step, is_before=False)
 
-        # 6. 执行验证
+        # 4. 执行验证
         self._run_validations(step)
 
-    def _execute_action(self, step: StepConfig, is_valid_action: bool):
+    def _execute_action(self, step: StepConfig):
         """执行动作步骤
 
         Args:
             step: 步骤配置
-            is_valid_action: 动作是否合法
 
         Raises:
             AssertionError: 验证失败
         """
-        # 打印动作（带颜色）
-        self._print_action(step.player, step.action_type, step.parameter, is_valid_action)
+        # 打印动作信息
+        formatted_param = self._format_action_param(step.action_type, step.parameter)
+        action_str = f"{step.action_type.name}({formatted_param})"
+        print(f"  玩家 {step.player} 尝试: {action_str}")
 
-        # 只有合法动作才执行
-        if is_valid_action:
+        # 执行动作，根据异常和 info 判断合法性
+        try:
             action = (step.action_type.value, step.parameter)
             obs, reward, terminated, truncated, info = self.env.step(action)
-            print(f"  → 转移到状态: {self.env.state_machine.current_state_type.name}")
-        else:
-            print(f"  → 动作未执行")
+
+            # 检查 info 中的错误信息
+            if 'error' in info:
+                print(f"  {RED}→ 动作非法: {info['error']}{RESET}")
+            else:
+                print(f"  → 执行成功，转移到状态: {self.env.state_machine.current_state_type.name}")
+        except ValueError as e:
+            # 动作非法（格式错误等）
+            print(f"  {RED}→ 动作非法: {str(e)}{RESET}")
 
     def _auto_advance(self, step: StepConfig):
         """自动推进步骤
@@ -264,46 +260,7 @@ class TestExecutor:
         # 牌墙数量
         print(f"\n牌墙剩余: {len(context.wall)} 张")
 
-    def _print_action(self, player: int, action_type: ActionType, param: int, is_valid: bool):
-        """打印动作，非法动作用红色，参数使用牌名"""
-        formatted_param = self._format_action_param(action_type, param)
-        action_str = f"{action_type.name}({formatted_param})"
-
-        if is_valid:
-            print(f"  玩家 {player} 执行: {action_str}")
-        else:
-            print(f"  {RED}玩家 {player} 尝试: {action_str} - 非法动作!{RESET}")
-
-    # ==================== 状态记录方法 ====================
-
-    def _record_state(self):
-        """记录当前状态到历史"""
-        state = self.env.state_machine.current_state_type
-        timestamp = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
-        self.state_history.append((state, timestamp))
-
     # ==================== 动作验证方法 ====================
-
-    def _check_action_valid(self, action: tuple) -> bool:
-        """检查动作是否合法
-
-        Args:
-            action: (action_type_value, parameter) 元组
-
-        Note:
-            这里只做简单的合法性检查，避免使用 action_mask（因为它在执行前可能未设置）。
-            真正的验证由环境执行。
-        """
-        action_type, param = action
-
-        # 对于 DISCARD 动作，检查牌是否在手牌中
-        if action_type == ActionType.DISCARD.value:
-            current_player = self.env.context.players[self.env.context.current_player_idx]
-            return param in current_player.hand_tiles
-
-        # 对于其他动作，暂时返回 True（让环境自己验证）
-        # TODO: 可以添加更多动作类型的简单检查
-        return True
 
     def _run_validations(self, step: StepConfig):
         """运行所有验证
