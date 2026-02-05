@@ -134,16 +134,30 @@ class TestExecutor:
             AssertionError: 验证失败
             Exception: 执行错误
         """
-        print(f"\n步骤 {step.step_number}: {step.description}")
+        # 1. 打印步骤执行前的状态
+        if self.verbose:
+            self._print_game_state(step, is_before=True)
 
+        # 2. 检查动作合法性（如果是动作步骤）
+        is_valid_action = True
+        if step.is_action:
+            action = (step.action_type.value, step.parameter)
+            is_valid_action = self._check_action_valid(action)
+
+        # 3. 执行步骤
         if step.is_auto:
-            # 自动步骤：状态机自动推进
             self._auto_advance(step)
         elif step.is_action:
-            # 动作步骤：执行指定动作
-            self._execute_action(step)
+            self._execute_action(step, is_valid_action)
 
-        # 执行验证
+        # 4. 记录状态转换
+        self._record_state()
+
+        # 5. 打印步骤执行后的状态
+        if self.verbose:
+            self._print_game_state(step, is_before=False)
+
+        # 6. 执行验证
         self._run_validations(step)
 
     def _execute_action(self, step: StepConfig):
