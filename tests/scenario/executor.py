@@ -225,6 +225,40 @@ class TestExecutor:
                 return str(param)
         return str(param)
 
+    def _format_melds(self, player_idx: int) -> List[str]:
+        """格式化玩家的牌组信息
+
+        Args:
+            player_idx: 玩家索引
+
+        Returns:
+            牌组描述列表，如 ["碰: 一万", "明杠: 五条"]
+        """
+        player = self.env.context.players[player_idx]
+        if not player.melds:
+            return []
+
+        result = []
+        for meld in player.melds:
+            action_name = meld.action_type.action_type.name
+            tile_name = self.visualizer.format_tile(meld.tiles[0])
+
+            # 根据动作类型格式化
+            if action_name == "CHOW":
+                result.append(f"吃: {tile_name}")
+            elif action_name == "PONG":
+                result.append(f"碰: {tile_name}")
+            elif action_name == "KONG_EXPOSED":
+                result.append(f"明杠: {tile_name}")
+            elif action_name == "KONG_CONCEALED":
+                result.append("暗杠")
+            elif action_name == "KONG_SUPPLEMENT":
+                result.append(f"补杠: {tile_name}")
+            else:
+                result.append(f"{action_name}: {tile_name}")
+
+        return result
+
     # ==================== 打印方法 ====================
 
     def _print_game_state(self, step: StepConfig, is_before: bool = True):
