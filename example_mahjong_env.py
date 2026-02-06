@@ -660,6 +660,26 @@ class WuhanMahjongEnv(AECEnv):
 
         return action_mask[action_index] == 1
 
+    def _get_masking_probability(self) -> float:
+        """
+        根据progress计算S曲线掩码概率
+
+        S曲线特性：
+        - progress=0.0 时，概率接近 0（接近阶段1全知）
+        - progress=0.5 时，概率=0.5（过渡中点）
+        - progress=1.0 时，概率接近 1（接近阶段3完全掩码）
+
+        Returns:
+            掩码概率 (0.0-1.0)
+        """
+        if self.training_phase != 2:
+            return 0.0 if self.training_phase == 1 else 1.0
+
+        # S曲线：sigmoid函数，6*(x-0.5) 让曲线在中间变化更明显
+        import math
+        sigmoid = 1 / (1 + math.exp(-6 * (self.phase2_progress - 0.5)))
+        return sigmoid
+
     def _apply_visibility_mask(self, observation: Dict[str, np.ndarray], agent_id: int) -> Dict[str, np.ndarray]:
         """
         应用信息可见度掩码
