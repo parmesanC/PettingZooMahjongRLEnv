@@ -258,17 +258,24 @@ class MahjongScoreSettler:
             return 2 if loser_idx == dealer_idx else 1
 
     def _apply_capping(self, loser_scores: List[float]) -> List[float]:
-        """应用封顶和金顶规则"""
-        # 单家封顶300
-        capped_scores = [min(score, 300.0) for score in loser_scores]
+        """应用封顶和金顶规则
 
-        # 检查是否触发金顶（三家输点都≥300）
+        规则：
+        1. 普通封顶：单家最高300分
+        2. 金顶：三家原始分数都≥300时，上限提升到400分（口口翻500分）
+
+        注意：这是上限值，不是固定值。每家分数分别应用上限。
+        """
+        # 确定上限：检查是否触发金顶（三家原始分数都≥300）
         if all(score >= 300.0 for score in loser_scores):
-            # 金顶分数：400（口口翻模式500）
-            jin_ding_score = 500.0 if self.is_kou_kou_fan else 400.0
-            capped_scores = [jin_ding_score] * 3
+            # 启用金顶，上限变为400（口口翻模式500）
+            cap = 500.0 if self.is_kou_kou_fan else 400.0
+        else:
+            # 普通封顶，上限300
+            cap = 300.0
 
-        return capped_scores
+        # 对每家分数分别应用上限
+        return [min(score, cap) for score in loser_scores]
 
     def _check_contractor(self, ctx: GameContext,
                           win_result: WinCheckResult,
