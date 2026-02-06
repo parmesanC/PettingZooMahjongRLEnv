@@ -64,6 +64,7 @@ class WuhanMahjongEnv(AECEnv):
         self,
         render_mode=None,
         training_phase=3,
+        phase2_progress=0.0,  # 新增：阶段2的课程学习进度（0.0-1.0）
         enable_logging=True,
         log_config=None,
         logger=None,
@@ -75,6 +76,7 @@ class WuhanMahjongEnv(AECEnv):
         Args:
             render_mode: 渲染模式
             training_phase: 训练阶段（影响信息可见度）
+            phase2_progress: 阶段2的课程学习进度（0.0-1.0）
             enable_logging: 是否启用日志系统
             log_config: 日志配置字典（覆盖默认配置）
             logger: 自定义日志器（如果提供，则忽略 log_config）
@@ -83,6 +85,7 @@ class WuhanMahjongEnv(AECEnv):
         super().__init__()
 
         self.training_phase = training_phase
+        self.phase2_progress = max(0.0, min(1.0, float(phase2_progress)))  # 限制在0-1范围
         self.num_players = 4
         self.possible_agents = [f"player_{i}" for i in range(self.num_players)]
         self.agents = self.possible_agents[:]
