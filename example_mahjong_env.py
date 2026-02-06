@@ -682,41 +682,93 @@ class WuhanMahjongEnv(AECEnv):
 
     def _apply_visibility_mask(self, observation: Dict[str, np.ndarray], agent_id: int) -> Dict[str, np.ndarray]:
         """
-        应用信息可见度掩码
-        
-        根据训练阶段，屏蔽一些信息（如对手手牌）。
-        
+        应用信息可见度掩码（课程学习）
+
+        阶段设计：
+        - 阶段1（全知视角）：所有信息可见
+        - 阶段2（渐进式）：随progress逐渐增加掩码
+        - 阶段3（真实状态）：只可见自己手牌和公共信息
+
+        特殊值约定：
+        - global_hand: 5 表示"未知"
+        - wall: 34 表示"未知"
+        - melds.tiles: 暗杠的牌设为 34（与wall一致）
+
         Args:
             observation: 原始观测
             agent_id: 当前agent ID
-        
+
         Returns:
             掩码后的观测
         """
         if self.training_phase == 1:
-            # 阶段1：只保留私有手牌
-            observation['global_hand'] = np.zeros(4 * 34, dtype=np.int8)
-            observation['wall'].fill(34)
-        
-        elif self.training_phase == 3:
-            # 阶段3：屏蔽对手手牌
-            global_hand = observation['global_hand'].copy()
-            for i in range(4):
-                if i != agent_id:
-                    global_hand[i * 34:(i + 1) * 34] = 0
-            observation['global_hand'] = global_hand
-            observation['wall'].fill(34)
-        
-        # 阶段2：随机屏蔽（这里简化处理）
+            # 阶段1：全知视角，不做任何掩码
+            pass
+
         elif self.training_phase == 2:
-            # 简化：使用阶段3的逻辑
+            # 阶段2：渐进式随机掩码
+            mask_prob = self._get_masking_probability()
+
+            # 按概率掩码对手手牌
+            if np.random.random() < mask_prob:
+                global_hand = observation['global_hand'].copy()
+                for i in range(4):
+                    if i != agent_id:
+                        global_hand[i * 34:(i + 1) * 34] = 5
+                observation['global_hand'] = global_hand
+
+            # 按概率掩码牌墙
+            if np.random.random() < mask_prob:
+                observation['wall'].fill(34)
+
+            # 按概率掩码对手暗杠的牌
+            if np.random.random() < mask_prob:
+                tiles = observation['melds']['tiles'].copy()
+                action_types = observation['melds']['action_types']
+                KONG_CONCEALED = 5  # ActionType.KONG_CONCEALED.value
+
+                for player_id in range(4):
+                    if player_id == agent_id:
+                        continue
+                    for meld_idx in range(4):
+                        idx = player_id * 4 + meld_idx
+                        if action_types[idx] == KONG_CONCEALED:
+                            # 将这个暗杠的4张牌位置设为34
+                            base_tile_idx = (player_id * 4 * 4 + meld_idx * 4) * 34
+                            for tile_pos in range(4):
+                                tile_start = base_tile_idx + tile_pos * 34
+                                tiles[tile_start:tile_start + 34] = 34
+                observation['melds']['tiles'] = tiles
+
+        elif self.training_phase == 3:
+            # 阶段3：真实状态，完全掩码
+            # 掩码对手手牌
             global_hand = observation['global_hand'].copy()
             for i in range(4):
                 if i != agent_id:
-                    global_hand[i * 34:(i + 1) * 34] = 0
+                    global_hand[i * 34:(i + 1) * 34] = 5
             observation['global_hand'] = global_hand
+
+            # 掩码牌墙
             observation['wall'].fill(34)
-        
+
+            # 掩码对手暗杠的牌
+            tiles = observation['melds']['tiles'].copy()
+            action_types = observation['melds']['action_types']
+            KONG_CONCEALED = 5
+
+            for player_id in range(4):
+                if player_id == agent_id:
+                    continue
+                for meld_idx in range(4):
+                    idx = player_id * 4 + meld_idx
+                    if action_types[idx] == KONG_CONCEALED:
+                        base_tile_idx = (player_id * 4 * 4 + meld_idx * 4) * 34
+                        for tile_pos in range(4):
+                            tile_start = base_tile_idx + tile_pos * 34
+                            tiles[tile_start:tile_start + 34] = 34
+            observation['melds']['tiles'] = tiles
+
         return observation
     
     def _calculate_reward(self, agent_id: int) -> float:
