@@ -885,6 +885,7 @@ if __name__ == "__main__":
     print("=" * 60)
     
     # 创建环境
+    # training_phase: 1=全知视角, 2=渐进式掩码(需配合phase2_progress), 3=真实状态
     env = WuhanMahjongEnv(render_mode='human', training_phase=3)
     
     # 重置环境
