@@ -706,23 +706,22 @@ class WuhanMahjongEnv(AECEnv):
             pass
 
         elif self.training_phase == 2:
-            # 阶段2：渐进式随机掩码
+            # 阶段2：渐进式随机掩码（关联决策）
             mask_prob = self._get_masking_probability()
 
-            # 按概率掩码对手手牌
+            # 单一随机决策：决定是否应用所有掩码（保持状态一致性）
             if np.random.random() < mask_prob:
+                # 掩码对手手牌
                 global_hand = observation['global_hand'].copy()
                 for i in range(4):
                     if i != agent_id:
                         global_hand[i * 34:(i + 1) * 34] = 5
                 observation['global_hand'] = global_hand
 
-            # 按概率掩码牌墙
-            if np.random.random() < mask_prob:
+                # 掩码牌墙
                 observation['wall'].fill(34)
 
-            # 按概率掩码对手暗杠的牌
-            if np.random.random() < mask_prob:
+                # 掩码对手暗杠的牌
                 tiles = observation['melds']['tiles'].copy()
                 action_types = observation['melds']['action_types']
                 KONG_CONCEALED = 5  # ActionType.KONG_CONCEALED.value
