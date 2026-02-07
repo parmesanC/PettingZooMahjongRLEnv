@@ -69,7 +69,8 @@ class Wuhan7P4LObservationBuilder(IObservationBuilder):
         # 添加action_mask
         observation['action_mask'] = self.build_action_mask(player_id, context)
 
-        observation = self._apply_visibility_mask(observation, player_id, context)
+        # 注意：可见度掩码已由 WuhanMahjongEnv._apply_visibility_mask 处理
+        # 不需要在此处重复处理
 
         return observation
 
@@ -367,23 +368,8 @@ class Wuhan7P4LObservationBuilder(IObservationBuilder):
     def _map_game_state_to_phase(self, game_state: GameStateType) -> int:
         return STATE_TO_PHASE.get(game_state, 7)
 
+    # 注意：可见度掩码功能已移至 WuhanMahjongEnv._apply_visibility_mask
+    # 此处保留空占位符以避免破坏可能的引用
     def _apply_visibility_mask(self, observation: Dict, player_id: int, context: GameContext) -> Dict:
-        training_phase = getattr(context, 'training_phase', 3)
-        progress = getattr(context, 'training_progress', 1.0)
-
-        if training_phase == 1:
-            pass
-        elif training_phase == 2:
-            visibility = 1.0 - progress
-            if np.random.random() > visibility:
-                for i in range(4):
-                    if i != player_id:
-                        observation['global_hand'][i*34:(i+1)*34] = 0
-                observation['wall'].fill(34)
-        elif training_phase == 3:
-            for i in range(4):
-                if i != player_id:
-                    observation['global_hand'][i*34:(i+1)*34] = 0
-            observation['wall'].fill(34)
-
+        # 不再在此处处理可见度掩码，由环境层处理
         return observation
