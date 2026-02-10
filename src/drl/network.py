@@ -381,24 +381,6 @@ class ObservationEncoder(nn.Module):
         # 融合所有特征
         combined = torch.cat(features, dim=-1)
 
-        # 信念集成（可选）
-        if self.use_belief and belief_samples is not None:
-            # 编码信念采样
-            belief_features = []
-            for sample in belief_samples:
-                # 每个采样包含对手的观测字典
-                sample_feat = self.encoder(sample)  # [batch, hidden_dim]
-                belief_features.append(sample_feat)
-
-            # 平均所有采样的特征
-            if belief_features:
-                avg_belief_feat = torch.stack(belief_features, dim=0) / len(
-                    belief_features
-                )  # [batch, hidden_dim]
-
-                # 拼接到主特征
-                combined = torch.cat([combined, avg_belief_feat], dim=-1)
-
         return self.fusion(combined)
 
     def _process_melds(self, melds: Dict) -> torch.Tensor:
@@ -523,17 +505,6 @@ class ActorCriticNetwork(nn.Module):
             # 拼接到主特征
             combined = torch.cat([features, avg_belief_feat], dim=-1)
             features = combined
-        """
-        Args:
-            obs: 观测字典
-            action_mask: [batch, 145] 动作掩码
-        Returns:
-            action_type_logits: [batch, 11]
-            action_param_logits: [batch, 34]
-            value: [batch, 1]
-        """
-        # 编码观测
-        features = self.encoder(obs)  # [batch, hidden_dim]
 
         # Actor 输出
         action_type_logits = self.actor_type(features)  # [batch, 11]
