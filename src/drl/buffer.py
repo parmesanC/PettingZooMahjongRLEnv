@@ -493,6 +493,7 @@ class CentralizedRolloutBuffer:
         actions_param: List[int],
         log_probs: List[float],
         rewards: List[float],
+        values: List[float] = None,
         done: bool = False,
     ):
         """
@@ -505,6 +506,7 @@ class CentralizedRolloutBuffer:
             actions_param: 所有agents的动作参数（4个参数）
             log_probs: 所有agents的对数概率（4个概率）
             rewards: 所有agents的奖励（4个奖励）
+            values: 所有agents的价值估计（4个价值，可选）
             done: episode是否结束
         """
         # 对每个agent添加数据
@@ -515,6 +517,11 @@ class CentralizedRolloutBuffer:
             self.current_actions_param[agent_idx].append(actions_param[agent_idx])
             self.current_log_probs[agent_idx].append(log_probs[agent_idx])
             self.current_rewards[agent_idx].append(rewards[agent_idx])
+
+            # Store values if provided
+            if values is not None:
+                self.current_values[agent_idx].append(values[agent_idx])
+
             self.current_all_observations[agent_idx].append(all_observations)
             self.current_dones[agent_idx].append(done)
 
