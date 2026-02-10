@@ -117,13 +117,6 @@ class MAPPO:
         old_log_probs = np.array(buffer.log_probs)
         old_values = np.array(buffer.values)
 
-        # 转换为张量
-        action_masks = torch.FloatTensor(action_masks).to(self.device)
-        old_actions_type = torch.LongTensor(old_actions_type).to(self.device)
-        old_actions_param = torch.LongTensor(old_actions_param).to(self.device)
-        old_log_probs = torch.FloatTensor(old_log_probs).to(self.device)
-        returns = torch.FloatTensor(buffer.returns).to(self.device)
-
         # Phase 1 和 2: 使用 centralized critic
         if use_centralized and len(observations) > 0:
             # 构建全局观测
