@@ -191,23 +191,29 @@ class NFSPTrainer:
             # 后期：使用历史策略
             use_random_opponents = False
 
-        # [临时] 收集所有智能体的全局观测（用于诊断 Critic 观测范围）
-        all_agents_observations = {}
+        # [NEW] Step-by-step data collection for centralized buffer
+        # 每个时间步存储4个agents的数据
+        step_data = []  # List of dicts, each containing data for one agent action
+        agent_turn_count = 0  # Track how many agents have acted in current step
 
         # 回合数据
         episode_rewards = [0.0] * 4
         episode_steps = 0
         winner = None
 
+        # 用于收集最终观测（诊断用）
+        all_agents_observations = {}
+
         # PettingZoo 标准循环：使用 agent_iter() 和 last()
         for agent_name in self.env.agent_iter():
             episode_steps += 1
+            agent_turn_count += 1
 
             # 关键：使用 env.last() 获取所有信息（obs, reward, terminated, truncated, info）
             obs, reward, terminated, truncated, info = self.env.last()
             agent_idx = int(agent_name.split("_")[1])
 
-            # [临时] 收集全局观测（用于诊断）
+            # [诊断] 收集最终观测
             all_agents_observations[agent_name] = obs
 
             # 从观测字典中获取 action_mask
@@ -221,9 +227,33 @@ class NFSPTrainer:
                 action_type, action_param = self.random_opponent.choose_action(
                     obs, action_mask
                 )
+                log_prob, value = 0.0, 0.0  # 随机对手不提供这些值
             else:
                 agent = self.agent_pool.get_agent(agent_idx)
                 action_type, action_param = agent.choose_action(obs, action_mask)
+                # 尝试获取训练信息
+                if hasattr(agent, 'get_training_info'):
+                    log_prob, value = agent.get_training_info()
+                else:
+                    log_prob, value = 0.0, 0.0
+
+            # [NEW] 收集step数据（用于集中式critic训练）
+            # Deep copy obs以避免引用问题
+            import copy
+            obs_copy = {k: v.copy() if hasattr(v, 'copy') else v for k, v in obs.items()}
+            action_mask_copy = action_mask.copy()
+
+            step_data.append({
+                'agent_idx': agent_idx,
+                'obs': obs_copy,
+                'action_mask': action_mask_copy,
+                'action_type': action_type,
+                'action_param': action_param,
+                'log_prob': log_prob,
+                'reward': reward,
+                'value': value,
+                'done': terminated or truncated,
+            })
 
             # 执行动作（不使用返回值，下一次 last() 会提供新信息）
             self.env.step((action_type, action_param))
@@ -236,22 +266,12 @@ class NFSPTrainer:
                 elif "winners" in info and info["winners"]:
                     winner = info["winners"][0]
 
-        # [诊断] 输出：所有智能体的全局观测
-        print(f"\n[诊断] Episode {self.episode_count}:")
-        print(f"  收集到的观测键: {list(all_agents_observations.keys())}")
-
-        for agent_name, obs in all_agents_observations.items():
-            print(f"  Agent {agent_name}:")
-            print(f"    观测类型: {type(obs)}")
-            print(f"    Shape: {obs.shape}")
-            if "action_mask" in obs:
-                print(f"    有 action_mask")
-            else:
-                print(f"    无 action_mask")
-
-        print(f"\n结论: 当前架构中，env.last() 已经返回全局观测（所有玩家信息）")
-        print(f"但 Critic 只能看到当前轮次的智能体的观测（自己的观测）")
-        print(f"这是一个架构问题，影响 MADDPG/MAPPO 训练效果")
+        # [诊断] 输出：所有智能体的全局观测 (仅在第一次输出)
+        if self.episode_count == 0:
+            print(f"\n[诊断] Episode {self.episode_count}:")
+            print(f"  总步数: {episode_steps}")
+            print(f"  收集到的数据点数: {len(step_data)}")
+            print(f"  收集到的观测键: {list(all_agents_observations.keys())}")
 
         # 返回回合统计
         episode_stats = {
@@ -261,38 +281,51 @@ class NFSPTrainer:
             "use_random_opponents": use_random_opponents,
             "curriculum_phase": self.current_phase,
             "curriculum_progress": self.current_progress,
-            "_diagnostics": {
-                "all_agents_observations": all_agents_observations  # 诊断信息
-            },
         }
-
-        # [NEW] 存储全局观测到 agent_pool（用于集中式 critic 训练）
-        self.agent_pool.store_global_observation(
-            all_agents_observations=all_agents_observations,
-            episode_info={"episode_num": self.episode_count},
-        )
 
         # [NEW] 填充 CentralizedRolloutBuffer（用于 Phase 1-2）
         # Phase 1-2: 需要所有agents的观测用于 centralized critic
-        if self.current_phase in [1, 2]:
-            # 将episode结束时所有agents的观测转换为列表格式
-            # 按照agent顺序：player_0, player_1, player_2, player_3
-            agent_order = [f"player_{i}" for i in range(4)]
-            all_obs = [all_agents_observations.get(agent, {}) for agent in agent_order]
+        if self.current_phase in [1, 2] and len(step_data) > 0:
+            self._populate_centralized_buffer_from_steps(step_data)
 
-            # 创建其他必需的数据（使用episode结束时的数据作为近似）
-            num_steps = episode_steps
-            all_action_masks = [np.ones(145) for _ in range(4)]
-            all_actions_type = [0 for _ in range(4)]
-            all_actions_param = [-1 for _ in range(4)]
-            all_log_probs = [0.25 for _ in range(4)]  # 均匀概率
-            all_rewards = episode_rewards  # 每个agent的总奖励
-            all_values = [0.0 for _ in range(4)]  # 简化：使用0作为价值
-            all_dones = [True for _ in range(4)]  # episode结束
+        return episode_stats
 
-            # 使用add_multi_agent添加episode数据到centralized buffer
-            # 注意：这是一个简化实现，因为当前架构限制
-            # 完整实现应该在每个step收集数据
+    def _populate_centralized_buffer_from_steps(self, step_data: List[Dict]):
+        """
+        从收集的step数据填充CentralizedRolloutBuffer
+
+        Args:
+            step_data: List of dicts, each containing data for one agent action
+                      Keys: agent_idx, obs, action_mask, action_type, action_param,
+                            log_prob, reward, value, done
+        """
+        import numpy as np
+
+        # 计算时间步数量（每次完整轮转4个agents）
+        num_steps = len(step_data) // 4
+
+        # 为每个时间步收集4个agents的数据
+        for step_idx in range(num_steps):
+            step_start = step_idx * 4
+            step_agents = step_data[step_start:step_start + 4]
+
+            # 按agent_idx排序（确保顺序正确）
+            step_agents_sorted = sorted(step_agents, key=lambda x: x['agent_idx'])
+
+            # 提取各agents的数据
+            all_obs = [a['obs'] for a in step_agents_sorted]
+            all_action_masks = [a['action_mask'] for a in step_agents_sorted]
+            all_actions_type = [a['action_type'] for a in step_agents_sorted]
+            all_actions_param = [a['action_param'] for a in step_agents_sorted]
+            all_log_probs = [a['log_prob'] for a in step_agents_sorted]
+            all_rewards = [a['reward'] for a in step_agents_sorted]
+            all_values = [a['value'] if a['value'] is not None else 0.0 for a in step_agents_sorted]
+            all_dones = [a['done'] for a in step_agents_sorted]
+
+            # 使用最后一个agent的done标志
+            done = all_dones[-1] if all_dones else False
+
+            # 使用add_multi_agent添加数据
             self.agent_pool.nfsp.buffer.centralized_buffer.add_multi_agent(
                 all_observations=all_obs,
                 action_masks=all_action_masks,
@@ -301,13 +334,12 @@ class NFSPTrainer:
                 log_probs=all_log_probs,
                 rewards=all_rewards,
                 values=all_values,
-                done=all_dones[0],  # 使用第一个agent的done标志
-            )
-            print(
-                f"[P0-4] 填充 centralized_buffer: {len(self.agent_pool.nfsp.buffer.centralized_buffer.episodes)} episodes"
+                done=done,
             )
 
-        return episode_stats
+        if self.episode_count == 0:
+            print(f"  填充 centralized_buffer: {num_steps} 时间步")
+
 
     def _evaluate(self) -> Dict:
         """
