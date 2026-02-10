@@ -356,16 +356,31 @@ class NFSPAgentWrapper:
         self.nfsp = nfsp
         self.agent_id = agent_id
         self.total_steps = 0
+        # 存储最后一次动作的训练信息
+        self._last_log_prob = 0.0
+        self._last_value = 0.0
 
     def choose_action(
         self, observation: Dict[str, np.ndarray], action_mask: np.ndarray
     ) -> Tuple[int, int]:
         """选择动作"""
-        action_type, action_param, _, _ = self.nfsp.select_action(
+        action_type, action_param, log_prob, value = self.nfsp.select_action(
             observation, action_mask
         )
+        # 存储训练信息
+        self._last_log_prob = log_prob
+        self._last_value = value
         self.total_steps += 1
         return action_type, action_param
+
+    def get_training_info(self) -> Tuple[float, float]:
+        """
+        获取最后一次动作的训练信息
+
+        Returns:
+            (log_prob, value): 动作的对数概率和价值估计
+        """
+        return self._last_log_prob, self._last_value
 
     def store_transition(self, *args, **kwargs):
         """存储转移"""
