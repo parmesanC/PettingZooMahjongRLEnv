@@ -238,6 +238,8 @@ class NFSP:
                 )
                 stats.update(centralized_stats)
                 self.rl_steps += 1
+                # 训练后清空 centralized buffer 以保持数据新鲜
+                self.clear_centralized_buffer()
         else:
             # Phase 3: 使用 decentralized 训练（现有逻辑）
             # 1. 训练最佳响应网络（MAPPO）
@@ -369,3 +371,7 @@ class NFSP:
     def set_eta(self, eta: float):
         """设置 anticipatory 参数"""
         self.eta = max(0.0, min(1.0, eta))
+
+    def clear_centralized_buffer(self):
+        """清空 centralized buffer 以保持数据新鲜"""
+        self.centralized_buffer.clear()
