@@ -340,6 +340,9 @@ class NFSPTrainer:
         if self.episode_count == 0:
             print(f"  填充 centralized_buffer: {num_steps} 时间步")
 
+        # After populating, call finish_episode to package the data
+        self.agent_pool.centralized_buffer.finish_episode()
+
 
     def _evaluate(self) -> Dict:
         """

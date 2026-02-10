@@ -136,3 +136,35 @@ def test_add_multi_agent_without_values():
     # Should not crash, values should be empty or None
     assert len(buffer.current_values) == 4
     assert len(buffer.current_values[0]) == 0
+
+
+def test_finish_episode_packages_data():
+    """Test that finish_episode() makes data accessible via get_centralized_batch"""
+    from src.drl.buffer import CentralizedRolloutBuffer
+
+    buffer = CentralizedRolloutBuffer(capacity=1000)
+
+    # Add some step data
+    for step in range(5):
+        buffer.add(
+            obs={"step": step},
+            action_mask=np.ones(145),
+            action_type=0,
+            action_param=-1,
+            log_prob=0.25,
+            reward=1.0,
+            value=0.5,
+            all_observations=[{"step": step} for _ in range(4)],
+            done=(step == 4),
+            agent_idx=0,
+        )
+
+    # Before finish_episode, no episodes are stored
+    assert len(buffer.episodes) == 0
+
+    # Call finish_episode
+    buffer.finish_episode()
+
+    # Now data should be accessible
+    assert len(buffer.episodes) == 1
+    assert len(buffer.episodes[0]["observations"]) > 0
