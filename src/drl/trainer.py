@@ -326,7 +326,7 @@ class NFSPTrainer:
             done = all_dones[-1] if all_dones else False
 
             # 使用add_multi_agent添加数据
-            self.agent_pool.nfsp.buffer.centralized_buffer.add_multi_agent(
+            self.agent_pool.shared_nfsp.buffer.centralized_buffer.add_multi_agent(
                 all_observations=all_obs,
                 action_masks=all_action_masks,
                 actions_type=all_actions_type,
