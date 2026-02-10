@@ -644,7 +644,7 @@ class CentralizedRolloutBuffer:
             )
 
             # 创建转置后的列表
-            batch_all_observations = []
+            episode_all_observations = []
             for step_idx in range(num_steps):
                 step_all_agents_obs = []
                 for agent_idx in range(4):
@@ -658,7 +658,7 @@ class CentralizedRolloutBuffer:
                             step_all_agents_obs.append({})
                     else:
                         step_all_agents_obs.append({})
-                batch_all_observations.append(step_all_agents_obs)
+                episode_all_observations.append(step_all_agents_obs)
 
             # 现在 batch_all_observations 的格式是 [num_steps, 4, Dict]
             batch_actions_type = [
@@ -699,7 +699,7 @@ class CentralizedRolloutBuffer:
                 for agent_idx in range(4)
             ]
 
-            batch_all_observations.append(batch_all_observations)
+            batch_all_observations.append(episode_all_observations)
             batch_actions_type.append(batch_actions_type)
             batch_actions_param.append(batch_actions_param)
             batch_rewards.append(batch_rewards)
