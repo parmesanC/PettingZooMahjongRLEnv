@@ -633,7 +633,7 @@ class CentralizedRolloutBuffer:
             batch_obs = []
             for agent_idx in range(4):
                 agent_obs_list = [
-                    episode["observations"][step_idx][agent_idx]
+                    episode["observations"][agent_idx][step_idx]
                     for step_idx in range(num_steps)
                 ]
                 batch_obs.append(agent_obs_list)
@@ -668,50 +668,51 @@ class CentralizedRolloutBuffer:
                 episode_all_observations.append(step_all_agents_obs)
 
             # 现在 batch_all_observations 的格式是 [num_steps, 4, Dict]
-            batch_actions_type = [
+            # Note: Use different variable names to avoid shadowing outer scope
+            episode_actions_type = [
                 [
-                    episode["actions_type"][step_idx][agent_idx]
+                    episode["actions_type"][agent_idx][step_idx]
                     for step_idx in range(num_steps)
                 ]
                 for agent_idx in range(4)
             ]
-            batch_actions_param = [
+            episode_actions_param = [
                 [
-                    episode["actions_param"][step_idx][agent_idx]
+                    episode["actions_param"][agent_idx][step_idx]
                     for step_idx in range(num_steps)
                 ]
                 for agent_idx in range(4)
             ]
-            batch_rewards = [
+            episode_rewards = [
                 [
-                    episode["rewards"][step_idx][agent_idx]
+                    episode["rewards"][agent_idx][step_idx]
                     for step_idx in range(num_steps)
                 ]
                 for agent_idx in range(4)
             ]
 
             if "values" in episode and episode["values"]:
-                batch_values = [
+                episode_values = [
                     [
-                        episode["values"][step_idx][agent_idx]
+                        episode["values"][agent_idx][step_idx]
                         for step_idx in range(num_steps)
                     ]
                     for agent_idx in range(4)
                 ]
             else:
-                batch_values = None
+                episode_values = None
 
-            batch_dones = [
-                [episode["dones"][step_idx][agent_idx] for step_idx in range(num_steps)]
+            episode_dones = [
+                [episode["dones"][agent_idx][step_idx] for step_idx in range(num_steps)]
                 for agent_idx in range(4)
             ]
 
             batch_all_observations.append(episode_all_observations)
-            batch_actions_type.append(batch_actions_type)
-            batch_actions_param.append(batch_actions_param)
-            batch_rewards.append(batch_rewards)
-            batch_values.append(batch_values)
-            batch_dones.append(batch_dones)
+            batch_actions_type.append(episode_actions_type)
+            batch_actions_param.append(episode_actions_param)
+            batch_rewards.append(episode_rewards)
+            batch_values.append(episode_values)
+            batch_dones.append(episode_dones)
 
         # 转换为numpy数组（如果需要）
         # 这里我们保持List格式，让调用者处理
