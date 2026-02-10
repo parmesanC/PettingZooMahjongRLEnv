@@ -35,7 +35,6 @@ class MAPPO:
         ppo_epochs: int = 4,
         device: str = "cuda",
         centralized_critic=None,  # NEW: 添加 centralized_critic 支持
-        centralized_critic=None,  # NEW: 添加 centralized_critic 支持
     ):
         """
         初始化 MAPPO
@@ -75,59 +74,19 @@ class MAPPO:
         # 初始化优化器
         self.optimizer = optim.Adam(self.network.parameters(), lr=lr)
 
+        # [P1-6] 为 CentralizedCritic 创建单独的优化器
+        if self.centralized_critic is not None:
+            self.centralized_critic_optimizer = optim.Adam(
+                self.centralized_critic.parameters(), lr=lr
+            )
+        else:
+            self.centralized_critic_optimizer = None
+
         # 损失历史
         self.losses = []
         self.policy_losses = []
         self.value_losses = []
         self.entropy_losses = []
-
-    def update_centralized(self, centralized_buffer, training_phase=1):
-        """
-        使用 centralized observations 更新 centralized critic
-
-        Args:
-            centralized_buffer: CentralizedRolloutBuffer 实例
-            training_phase: 训练阶段（1=全知，2=渐进，3=真实）
-        """
-        # Phase 1 和 2 使用 centralized critic
-        if training_phase in [1, 2] and self.centralized_critic is not None:
-            # 从 centralized buffer 中获取数据
-            if len(centralized_buffer) > 0:
-                # 批次更新
-                observations = centralized_buffer.observations  # List of 4 observations
-                action_masks = centralized_buffer.action_masks  # List of 4 action masks
-
-                # 堆叠所有观测 [4, batch, ...]
-                stacked_observations = torch.stack(observations, dim=0)
-
-                # 预测价值
-                values = self.centralized_critic(stacked_observations)
-
-                # 计算优势
-                returns = centralized_buffer.returns  # [batch, 4]
-                next_values = (
-                    centralized_buffer.next_values
-                    if centralized_buffer.next_values is not None
-                    else values
-                )
-
-                advantages = returns - next_values
-
-                # 更新 centralized critic
-                # 将 advantages 分配给每个 agent
-                for agent_id in range(4):
-                    agent_mask = action_masks[agent_id]
-                    agent_advantages = advantages[:, agent_id]  # [batch]
-                    agent_returns = returns[:, agent_id]  # [batch]
-
-                    # 使用 centralized critic 更新
-                    # 注意：这里简化处理，实际中需要更复杂的逻辑
-                    if len(centralized_buffer.observations) > 0:
-                        # 更新所有 agents 的 centralized critic
-                        self.centralized_critic(observations)
-        else:
-            # Phase 3: 不使用 centralized critic
-            pass
 
     def update(self, buffer, next_obs=None, next_action_mask=None, training_phase=1):
         """
@@ -181,33 +140,12 @@ class MAPPO:
                 next_value = self.network.get_value(self._prepare_obs(next_obs))
 
         # 计算回报和优势
-        advantages = buffer.compute_returns_and_advantages(
-            self.gamma, self.gae_lambda, next_value
-        )
-
-        # 计算下一价值（用于 GAE）
-        next_value = 0.0
-        if next_obs is not None and not buffer.dones[-1]:
-            with torch.no_grad():
-                next_value = (
-                    self.network.get_value(self._prepare_obs(next_obs)).cpu().item()
-                )
-
-        # 计算回报和优势
         returns, advantages = buffer.compute_returns_and_advantages(
             self.gamma, self.gae_lambda, next_value
         )
 
         # 归一化优势（有助于训练稳定性）
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
-
-        # 获取所有数据
-        observations = buffer.observations
-        action_masks = np.array(buffer.action_masks)
-        old_actions_type = np.array(buffer.actions_type)
-        old_actions_param = np.array(buffer.actions_param)
-        old_log_probs = np.array(buffer.log_probs)
-        old_values = np.array(buffer.values)
 
         # 转换为张量
         action_masks = torch.FloatTensor(action_masks).to(self.device)
@@ -311,7 +249,7 @@ class MAPPO:
             "policy_loss": avg_policy_loss,
             "value_loss": avg_value_loss,
             "entropy_loss": avg_entropy_loss,
-            "training_step": self.training_step,
+            "used_centralized": False,
         }
 
     def _prepare_obs(self, obs: Dict[str, np.ndarray]) -> Dict[str, torch.Tensor]:
@@ -619,12 +557,12 @@ class MAPPO:
         critic_loss = ((values_flat - returns_flat) ** 2).mean()
 
         # 更新centralized critic
-        self.optimizer.zero_grad()
+        self.centralized_critic_optimizer.zero_grad()
         critic_loss.backward()
         torch.nn.utils.clip_grad_norm_(
             self.centralized_critic.parameters(), self.max_grad_norm
         )
-        self.optimizer.step()
+        self.centralized_critic_optimizer.step()
 
         # 记录损失
         self.losses.append(critic_loss.item())
