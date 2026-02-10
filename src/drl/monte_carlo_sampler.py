@@ -117,10 +117,9 @@ class MonteCarloSampler:
         # 深拷贝GameContext
         sampled_context = copy.deepcopy(context)
 
-        # 更新对手手牌（仅更新索引为0,1,2的玩家）
-        for opp in range(1, 3):
-            opp_idx = opp + 1  # 对手索引为1,2,3对应opponents 0,1,2
-            opp_player = sampled_context.players[opp_idx]
+        # 更新对手手牌（更新所有3个对手）
+        for opp in range(3):  # 处理所有对手 0, 1, 2
+            opp_player = sampled_context.players[opp]
 
             # 从采样索引中提取手牌
             opp_indices = sampled_indices[batch_idx, opp, :]  # [34]
