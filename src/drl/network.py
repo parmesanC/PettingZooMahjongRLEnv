@@ -192,10 +192,10 @@ class StateEncoder(nn.Module):
     def __init__(self, output_dim: int = 32):
         super().__init__()
         # 编码各种全局信息
+        # 输入维度：current_player(1) + remaining_tiles(1) + fan_counts(4) +
+        #           current_phase(1) + special_indicators(2) + dealer(1) = 10
         self.net = nn.Sequential(
-            nn.Linear(
-                4 + 1 + 4 + 1 + 2 + 1, 48
-            ),  # 当前玩家+剩余牌+番数+阶段+特殊牌指示+庄家
+            nn.Linear(10, 48),  # 修复：10维不是13维 (current_player是标量不是one-hot)
             nn.ReLU(),
             nn.Linear(48, output_dim),
             nn.ReLU(),

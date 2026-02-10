@@ -259,8 +259,21 @@ class MAPPO:
         for key, value in obs.items():
             if isinstance(value, dict):
                 tensor_obs[key] = self._prepare_obs(value)
+            elif isinstance(value, np.ndarray):
+                # numpy 数组：转换为 tensor 并确保正确的维度
+                tensor_val = torch.FloatTensor(value).to(self.device)
+                if tensor_val.dim() == 1:
+                    # [n] -> [1, n] (添加 batch 维度)
+                    tensor_val = tensor_val.unsqueeze(0)
+                elif tensor_val.dim() == 0:
+                    # scalar -> [1, 1] (添加 batch 和 feature 维度)
+                    tensor_val = tensor_val.unsqueeze(0).unsqueeze(0)
+                # dim >= 2 保持不变
+                tensor_obs[key] = tensor_val
             else:
-                tensor_obs[key] = torch.FloatTensor(value).unsqueeze(0).to(self.device)
+                # Python 标量（int, float）：转换为 [1, 1]
+                tensor_val = torch.FloatTensor([value]).unsqueeze(0).to(self.device)
+                tensor_obs[key] = tensor_val
         return tensor_obs
 
     def _prepare_obs_batch(self, observations: list) -> Dict[str, torch.Tensor]:
