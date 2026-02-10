@@ -52,7 +52,7 @@ class TestExecutor:
             # 创建环境
             self.env = WuhanMahjongEnv(
                 render_mode=None,
-                training_phase=3,  # 完整信息
+                training_phase=1,  # 完整信息
                 enable_logging=False  # 测试时关闭日志
             )
 

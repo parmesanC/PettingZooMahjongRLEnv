@@ -644,21 +644,26 @@ class CentralizedRolloutBuffer:
             # 我们需要转置为 [num_steps, 4, Dict] 格式
             # 其中每个元素是一个步骤，包含所有 4 个 agents 的观测
 
+            # IMPORTANT: Use "observations" not "all_observations"
+            # - "observations" = single agent's observation (Dict)
+            # - "all_observations" = what an agent sees of all agents (List[Dict])
+            # Centralized critic needs single agent obs, not the "all" view
+
             num_steps = (
-                len(episode["all_observations"][0])
-                if episode["all_observations"]
+                len(episode["observations"][0])
+                if episode["observations"]
                 else 0
             )
 
-            # 创建转置后的列表
+            # 创建转置后的列表 - 从 [4, num_steps] 到 [num_steps, 4]
             episode_all_observations = []
             for step_idx in range(num_steps):
                 step_all_agents_obs = []
                 for agent_idx in range(4):
-                    if agent_idx < len(episode["all_observations"]):
-                        if step_idx < len(episode["all_observations"][agent_idx]):
+                    if agent_idx < len(episode["observations"]):
+                        if step_idx < len(episode["observations"][agent_idx]):
                             step_all_agents_obs.append(
-                                episode["all_observations"][agent_idx][step_idx]
+                                episode["observations"][agent_idx][step_idx]
                             )
                         else:
                             # 如果数据不完整，用默认值填充
@@ -714,16 +719,36 @@ class CentralizedRolloutBuffer:
             batch_values.append(episode_values)
             batch_dones.append(episode_dones)
 
-        # 转换为numpy数组（如果需要）
-        # 这里我们保持List格式，让调用者处理
+        # 转换为numpy数组
+        # batch_all_observations 保持为 list（包含嵌套的 dict）
+        # 其他字段转换为 numpy array
+        batch_actions_type = np.array(batch_actions_type, dtype=np.int64)
+        batch_actions_param = np.array(batch_actions_param, dtype=np.int64)
+        batch_rewards = np.array(batch_rewards, dtype=np.float32)
+
+        # Handle values - filter out None episodes
+        if batch_values and any(v is not None for v in batch_values):
+            # Only convert non-None values
+            batch_values_filtered = []
+            for v in batch_values:
+                if v is not None:
+                    batch_values_filtered.append(v)
+            if batch_values_filtered:
+                batch_values = np.array(batch_values_filtered, dtype=np.float32)
+            else:
+                batch_values = None
+        else:
+            batch_values = None
+
+        batch_dones = np.array(batch_dones, dtype=np.bool_)
 
         return (
-            batch_all_observations,  # [batch_size, num_steps, 4] 或类似结构
-            batch_actions_type,  # [batch_size, num_steps, 4]
-            batch_actions_param,  # [batch_size, num_steps, 4]
-            batch_rewards,  # [batch_size, num_steps, 4]
-            batch_values,  # [batch_size, num_steps, 4]
-            batch_dones,  # [batch_size, num_steps, 4]
+            batch_all_observations,  # [batch_size, num_steps, 4, Dict]
+            batch_actions_type,  # [batch_size, num_steps, 4] numpy array
+            batch_actions_param,  # [batch_size, num_steps, 4] numpy array
+            batch_rewards,  # [batch_size, num_steps, 4] numpy array
+            batch_values,  # [batch_size_filtered, num_steps, 4] numpy array or None
+            batch_dones,  # [batch_size, num_steps, 4] numpy array
         )
 
     def get_decentralized_batch(

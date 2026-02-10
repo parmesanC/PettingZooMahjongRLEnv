@@ -1,0 +1,13 @@
+{
+  "total_episodes": 2,
+  "total_time": 1.3180716037750244,
+  "final_eval": null,
+  "best_win_rate": 0,
+  "config": {
+    "total_episodes": 5000000,
+    "switch_point": 2000,
+    "eta": 0.2,
+    "hidden_dim": 128,
+    "transformer_layers": 2
+  }
+}

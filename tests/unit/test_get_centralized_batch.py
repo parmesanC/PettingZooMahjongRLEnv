@@ -6,6 +6,47 @@ import numpy as np
 from src.drl.buffer import CentralizedRolloutBuffer
 
 
+def test_returns_numpy_arrays():
+    """Verify get_centralized_batch returns numpy arrays (not lists)"""
+    buffer = CentralizedRolloutBuffer(capacity=1000)
+
+    # Add 1 episode
+    for step in range(3):
+        for agent_idx in range(4):
+            buffer.add(
+                obs={"step": step, "agent": agent_idx},
+                action_mask=np.ones(145),
+                action_type=step,
+                action_param=step,
+                log_prob=0.25,
+                reward=1.0,
+                value=0.5,
+                all_observations=[{"step": step} for _ in range(4)],
+                done=(step == 2),
+                agent_idx=agent_idx,
+            )
+
+    buffer.finish_episode()
+
+    # Get batch
+    batch_all_obs, batch_actions_type, batch_actions_param, batch_rewards, batch_values, batch_dones = buffer.get_centralized_batch(
+        batch_size=1, device="cpu"
+    )
+
+    # Verify numpy arrays
+    assert isinstance(batch_actions_type, np.ndarray), "actions_type should be numpy array"
+    assert isinstance(batch_actions_param, np.ndarray), "actions_param should be numpy array"
+    assert isinstance(batch_rewards, np.ndarray), "rewards should be numpy array"
+    assert isinstance(batch_dones, np.ndarray), "dones should be numpy array"
+    assert isinstance(batch_values, np.ndarray), "values should be numpy array"
+
+    # Verify shape
+    assert batch_actions_type.shape == (1, 4, 3), f"Expected shape (1, 4, 3), got {batch_actions_type.shape}"
+
+    print(f"\n[PASS] Returns numpy arrays with correct shapes!")
+
+
+
 def test_get_centralized_batch_after_fix():
     """Verify get_centralized_batch works with correct indexing"""
     buffer = CentralizedRolloutBuffer(capacity=1000)

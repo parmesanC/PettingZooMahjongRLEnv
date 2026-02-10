@@ -304,6 +304,42 @@ class NFSPTrainer:
         # 计算时间步数量（每次完整轮转4个agents）
         num_steps = len(step_data) // 4
 
+        # 获取全局观测（用于添加 global_hand 字段）
+        # global_hand 包含所有 4 个 agents 的手牌，用于 centralized critic
+        global_obs = None
+        try:
+            context = self.env.unwrapped.context
+            obs_builder = self.env.unwrapped.state_machine.observation_builder
+            global_obs = obs_builder.build_global_observation(context, training_phase=self.current_phase)
+        except Exception as e:
+            # 如果无法获取全局观测，记录警告但继续
+            if self.episode_count == 0:
+                print(f"  [警告] 无法获取全局观测: {e}")
+
+        # 构建 global_hand: [136] = 4 agents × 34 tile types
+        # 从 player_i_hand [14, 34] one-hot 编码转换为 [34] count 编码
+        global_hand = None
+        if global_obs is not None:
+            try:
+                agent_hands = []
+                for i in range(4):
+                    hand_key = f"player_{i}_hand"
+                    if hand_key in global_obs:
+                        # [14, 34] one-hot -> [34] count (每张牌有多少个)
+                        hand_onehot = global_obs[hand_key]  # [14, 34]
+                        hand_count = hand_onehot.sum(axis=0)  # [34]
+                        agent_hands.append(hand_count)
+                    else:
+                        # 如果没有手牌数据，使用零向量
+                        agent_hands.append(np.zeros(34, dtype=np.float32))
+
+                # 拼接成 [136]
+                global_hand = np.concatenate(agent_hands)  # [136]
+            except Exception as e:
+                if self.episode_count == 0:
+                    print(f"  [警告] 构建 global_hand 失败: {e}")
+                global_hand = None
+
         # 为每个时间步收集4个agents的数据
         for step_idx in range(num_steps):
             step_start = step_idx * 4
@@ -313,7 +349,14 @@ class NFSPTrainer:
             step_agents_sorted = sorted(step_agents, key=lambda x: x['agent_idx'])
 
             # 提取各agents的数据
-            all_obs = [a['obs'] for a in step_agents_sorted]
+            all_obs = []
+            for a in step_agents_sorted:
+                obs = a['obs'].copy()  # 复制以避免修改原始数据
+                # 添加 global_hand 字段
+                if global_hand is not None:
+                    obs['global_hand'] = global_hand.copy()
+                all_obs.append(obs)
+
             all_action_masks = [a['action_mask'] for a in step_agents_sorted]
             all_actions_type = [a['action_type'] for a in step_agents_sorted]
             all_actions_param = [a['action_param'] for a in step_agents_sorted]
@@ -339,6 +382,10 @@ class NFSPTrainer:
 
         if self.episode_count == 0:
             print(f"  填充 centralized_buffer: {num_steps} 时间步")
+            if global_hand is not None:
+                print(f"  [成功] 已添加 global_hand 字段到观测中")
+            else:
+                print(f"  [警告] 未添加 global_hand 字段")
 
         # After populating, call finish_episode to package the data
         self.agent_pool.centralized_buffer.finish_episode()

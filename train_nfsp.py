@@ -2,17 +2,17 @@
 NFSP + MAPPO + Transformer 麻将智能体训练脚本
 
 使用方法：
-    # 标准训练（500万局，约1周）
+    # 完整训练（2000万局，约4周）
     python train_nfsp.py
-    
-    # 快速测试（1万局）
+
+    # 快速测试（10万局）
     python train_nfsp.py --quick-test
-    
+
     # 使用 CPU
     python train_nfsp.py --device cpu
-    
+
     # 自定义配置
-    python train_nfsp.py --episodes 1000000 --eta 0.15
+    python train_nfsp.py --quick-episodes 50000 --full-episodes 10000000
 
 作者：汪呜呜
 """
@@ -34,19 +34,20 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  python train_nfsp.py                           # 标准训练
-  python train_nfsp.py --quick-test              # 快速测试
-  python train_nfsp.py --device cpu              # 使用 CPU
-  python train_nfsp.py --episodes 1000000        # 自定义局数
-  python train_nfsp.py --eta 0.15                # 自定义 anticipatory 参数
+  python train_nfsp.py                               # 完整训练（2000万局）
+  python train_nfsp.py --quick-test                  # 快速测试（10万局）
+  python train_nfsp.py --device cpu                  # 使用 CPU
+  python train_nfsp.py --quick-episodes 50000       # 自定义快速测试局数
+  python train_nfsp.py --full-episodes 10000000     # 自定义完整训练局数
+  python train_nfsp.py --checkpoint checkpoints/checkpoint_10000.pth  # 从检查点恢复
         """
     )
-    
+
     # 基本参数
     parser.add_argument(
         '--quick-test',
         action='store_true',
-        help='快速测试模式（1万局，小网络）'
+        help='快速测试模式（10万局，小网络）'
     )
     
     parser.add_argument(
@@ -59,19 +60,26 @@ def main():
     
     # 训练参数
     parser.add_argument(
-        '--episodes',
+        '--quick-episodes',
         type=int,
         default=None,
-        help='总训练局数（默认: 500万）'
+        help='快速测试局数（默认: 10万）'
     )
-    
+
+    parser.add_argument(
+        '--full-episodes',
+        type=int,
+        default=None,
+        help='完整训练局数（默认: 2000万）'
+    )
+
     parser.add_argument(
         '--switch-point',
         type=int,
         default=None,
-        help='切换对手的局数（默认: 100万）'
+        help='切换对手的局数（默认: 总局数//5）'
     )
-    
+
     parser.add_argument(
         '--eta',
         type=float,
@@ -101,19 +109,26 @@ def main():
         default=42,
         help='随机种子（默认: 42）'
     )
-    
+
     parser.add_argument(
         '--log-dir',
         type=str,
         default='logs',
         help='日志目录（默认: logs）'
     )
-    
+
     parser.add_argument(
         '--checkpoint-dir',
         type=str,
         default='checkpoints',
         help='检查点目录（默认: checkpoints）'
+    )
+
+    parser.add_argument(
+        '--checkpoint',
+        type=str,
+        default=None,
+        help='检查点路径（用于恢复训练）'
     )
     
     args = parser.parse_args()
@@ -129,29 +144,37 @@ def main():
         print("=" * 80)
         print("🎮 NFSP + MAPPO + Transformer 麻将智能体训练")
         print("=" * 80)
-    
+
     # 覆盖配置参数
-    if args.episodes is not None:
-        config.training.total_episodes = args.episodes
-    
+    if args.quick_episodes is not None:
+        config.training.quick_test_episodes = args.quick_episodes
+
+    if args.full_episodes is not None:
+        config.training.full_training_episodes = args.full_episodes
+
     if args.switch_point is not None:
         config.training.switch_point = args.switch_point
-    
+
     if args.eta is not None:
         config.nfsp.eta = args.eta
-    
+
     if args.hidden_dim is not None:
         config.network.hidden_dim = args.hidden_dim
-    
+
     if args.transformer_layers is not None:
         config.network.transformer_layers = args.transformer_layers
-    
+
     if args.seed is not None:
         config.training.seed = args.seed
-    
+
     # 打印配置
     print("\n📋 训练配置:")
-    print(f"  总训练局数: {config.training.total_episodes:,}")
+    print(f"  训练模式: {config.training.mode}")
+    print(f"  总训练局数: {config.training.actual_total_episodes:,}")
+    print(f"  快速测试局数: {config.training.quick_test_episodes:,}")
+    print(f"  完整训练局数: {config.training.full_training_episodes:,}")
+    print(f"  评估间隔: 每 {config.training.eval_interval:,} 局")
+    print(f"  保存间隔: 每 {config.training.actual_save_interval:,} 局")
     print(f"  切换点: {config.training.switch_point:,} 局")
     print(f"  Anticipatory 参数 (η): {config.nfsp.eta}")
     print(f"  隐藏层维度: {config.network.hidden_dim}")
@@ -166,7 +189,8 @@ def main():
     try:
         trainer = train_nfsp(
             config=config,
-            device=args.device
+            device=args.device,
+            checkpoint_path=args.checkpoint
         )
         
         print("\n✅ 训练完成！")

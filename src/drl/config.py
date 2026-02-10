@@ -78,15 +78,20 @@ class MAPPOConfig:
 class TrainingConfig:
     """训练配置"""
     # 训练规模
-    total_episodes: int = 5_000_000  # 总局数
+    quick_test_episodes: int = 100_000      # 快速测试（10万局）
+    full_training_episodes: int = 20_000_000  # 完整训练（2000万局）
+    mode: str = 'full_training'  # 训练模式：'quick_test' 或 'full_training'
+    total_episodes: int = 5_000_000  # 总局数（旧字段，废弃）
     switch_point: int = 1_000_000  # 切换对手的局数（前期随机→后期历史）
     
     # 评估配置
     eval_interval: int = 1000  # 每多少局评估一次
     eval_games: int = 100  # 每次评估对战多少局
-    
-    # 保存配置
-    save_interval: int = 10_000  # 每多少局保存一次模型
+
+    # 保存配置（用户要求每 1000 局保存一次）
+    save_interval_quick_test: int = 100  # 快速测试：每 100 局保存
+    save_interval_full_training: int = 1000  # 完整训练：每 1000 局保存
+    save_interval: int = 10_000  # 兼容旧代码（废弃）
     checkpoint_dir: str = "checkpoints"
     log_dir: str = "logs"
     
@@ -96,6 +101,22 @@ class TrainingConfig:
     
     # 随机种子
     seed: Optional[int] = 42
+    
+    @property
+    def actual_total_episodes(self) -> int:
+        """实际总局数（根据模式）"""
+        if self.mode == 'quick_test':
+            return self.quick_test_episodes
+        else:
+            return self.full_training_episodes
+
+    @property
+    def actual_save_interval(self) -> int:
+        """实际保存间隔（根据模式）"""
+        if self.mode == 'quick_test':
+            return self.save_interval_quick_test
+        else:
+            return self.save_interval_full_training
 
 
 @dataclass
@@ -151,20 +172,23 @@ def get_default_config() -> Config:
 def get_quick_test_config() -> Config:
     """获取快速测试配置（小规模）"""
     config = Config()
-    
+
+    # 设置训练模式
+    config.training.mode = 'quick_test'
+
     # 缩小网络规模
     config.network.transformer_layers = 2
     config.network.hidden_dim = 128
     config.network.num_heads = 2
-    
+
     # 减小缓冲区
     config.nfsp.rl_buffer_size = 10_000
     config.nfsp.sl_buffer_size = 100_000
-    
+
     # 减少训练量
-    config.training.total_episodes = 10_000
+    config.training.quick_test_episodes = 10_000
     config.training.switch_point = 2_000
     config.training.eval_interval = 100
-    config.training.save_interval = 1_000
-    
+    config.training.save_interval_quick_test = 100
+
     return config

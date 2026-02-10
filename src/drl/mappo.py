@@ -401,8 +401,23 @@ class MAPPO:
         # actions_type: [batch_size, num_steps, 4]
         # rewards: [batch_size, num_steps, 4]
 
-        batch_size, num_steps, num_agents = actions_type.shape
+        batch_size, num_agents, num_steps = actions_type.shape  # 注意：格式是 [batch, agents, steps]
         num_agents = 4
+
+        # Debug: 打印数据形状
+        if self.training_step == 0:
+            print(f"[DEBUG] actions_type.shape: {actions_type.shape}")
+            print(f"[DEBUG] rewards.shape: {rewards.shape}")
+            print(f"[DEBUG] dones.shape: {dones.shape}")
+            print(f"[DEBUG] values.shape: {values.shape if values is not None else 'None'}")
+
+        # 转置数据：[batch, agents, steps] -> [batch, steps, agents]
+        actions_type = np.transpose(actions_type, (0, 2, 1))  # [batch_size, num_steps, num_agents]
+        actions_param = np.transpose(actions_param, (0, 2, 1))
+        rewards = np.transpose(rewards, (0, 2, 1))
+        dones = np.transpose(dones, (0, 2, 1))
+        if values is not None:
+            values = np.transpose(values, (0, 2, 1))
 
         # 准备数据
         all_observations_flat = []  # [batch_size * num_steps, num_agents, Dict]
@@ -435,47 +450,56 @@ class MAPPO:
         total_steps = batch_size * num_steps
         values_centralized = []
 
-        with torch.no_grad():
-            for i in range(total_steps):
-                # 获取这一步所有4个agents的观测
-                # all_observations_flat[i] 是 [4, Dict]
-                step_agent_obs = all_observations_flat[i]
+        # 计算每个时间步的 centralized critic 值（保持梯度）
+        for i in range(total_steps):
+            # 获取这一步所有4个agents的观测
+            # all_observations_flat[i] 是 [4, Dict]
+            step_agent_obs = all_observations_flat[i]
 
-                # 准备每个agent的观测字典
-                agent_obs_list = []
-                for agent_idx in range(4):
-                    obs = step_agent_obs[agent_idx]
-                    agent_obs_list.append(obs)
+            # 准备每个agent的观测字典
+            agent_obs_list = []
+            for agent_idx in range(4):
+                obs = step_agent_obs[agent_idx]
+                agent_obs_list.append(obs)
 
-                # 调用 centralized critic
-                # 这需要将obs转换为tensor格式
-                obs_batch_list = [
-                    self._prepare_obs(obs) if isinstance(obs, dict) else obs
-                    for obs in agent_obs_list
-                ]
-                values = self.centralized_critic(obs_batch_list)  # [batch, 4]
+            # 调用 centralized critic
+            # 这需要将obs转换为tensor格式
+            obs_batch_list = [
+                self._prepare_obs(obs) if isinstance(obs, dict) else obs
+                for obs in agent_obs_list
+            ]
+            values = self.centralized_critic(obs_batch_list)  # [1, 4]
 
-                # 由于我们是单步，取第0行
-                values_centralized.append(values[0].cpu().numpy())  # [4]
+            # 保持梯度，转换为 [4] tensor
+            values_centralized.append(values.squeeze(0))  # [4]
 
-        values_centralized = np.array(values_centralized)  # [total_steps, 4]
+        # Stack 为 [total_steps, 4] tensor - 保持计算图
+        values_centralized = torch.stack(values_centralized, dim=0)  # [total_steps, 4]
+
+        # 转换 reward 和 dones 为 tensor
+        rewards_tensor = torch.from_numpy(rewards.reshape(-1, num_agents)).float().to(self.device)  # [total_steps, 4]
+        dones_tensor = torch.from_numpy(dones.reshape(-1, num_agents)).bool().to(self.device)  # [total_steps, 4]
 
         # 重新reshape为 [batch_size, num_steps, 4]
         values_centralized = values_centralized.reshape(
             batch_size, num_steps, num_agents
-        )
+        )  # [batch_size, num_steps, 4]
+        rewards_tensor = rewards_tensor.reshape(
+            batch_size, num_steps, num_agents
+        )  # [batch_size, num_steps, 4]
+        dones_tensor = dones_tensor.reshape(
+            batch_size, num_steps, num_agents
+        )  # [batch_size, num_steps, 4]
 
-        # 计算 GAE 优势和回报
+        # 使用 tensor 计算 GAE 优势和回报
         # 为每个agent单独计算
         all_advantages = []
         all_returns = []
 
         for agent_idx in range(num_agents):
-            agent_rewards = rewards[:, :, agent_idx]  # [batch_size, num_steps]
-            agent_values = values_centralized[
-                :, :, agent_idx
-            ]  # [batch_size, num_steps]
-            agent_dones = dones[:, :, agent_idx]  # [batch_size, num_steps]
+            agent_rewards = rewards_tensor[:, :, agent_idx]  # [batch_size, num_steps]
+            agent_values = values_centralized[:, :, agent_idx]  # [batch_size, num_steps]
+            agent_dones = dones_tensor[:, :, agent_idx]  # [batch_size, num_steps]
 
             # 计算每个batch的GAE
             advantages_list = []
@@ -486,18 +510,18 @@ class MAPPO:
                 episode_values = agent_values[batch_idx]  # [num_steps]
                 episode_dones = agent_dones[batch_idx]  # [num_steps]
 
-                # 计算returns
-                returns = np.zeros_like(episode_rewards)
-                advantages = np.zeros_like(episode_rewards)
+                # 计算returns - 使用 torch 保持梯度
+                returns = torch.zeros_like(episode_rewards)
+                advantages = torch.zeros_like(episode_rewards)
 
                 # 最后一步的下一价值为0
-                next_value = 0.0
-                next_advantage = 0.0
+                next_value = torch.tensor(0.0).to(self.device)
+                next_advantage = torch.tensor(0.0).to(self.device)
 
                 # 反向计算GAE
                 for t in reversed(range(len(episode_rewards))):
                     if t == len(episode_rewards) - 1:
-                        next_value = 0.0
+                        next_value = torch.tensor(0.0).to(self.device)
                     else:
                         next_value = episode_values[t + 1]
 
@@ -508,56 +532,44 @@ class MAPPO:
 
                     # GAE
                     if t == len(episode_rewards) - 1:
-                        next_advantage = 0.0
+                        next_advantage = torch.tensor(0.0).to(self.device)
 
                     advantages[t] = (
                         delta + self.gae_lambda * self.gamma * next_advantage
                     )
                     next_advantage = advantages[t]
 
+                # returns = values + advantages
+                returns = episode_values + advantages
+
                 advantages_list.append(advantages)
                 returns_list.append(returns)
 
-            all_advantages.append(np.array(advantages_list))  # [batch_size, num_steps]
-            all_returns.append(np.array(returns_list))
+            # Stack 为 [batch_size, num_steps]
+            all_advantages.append(torch.stack(advantages_list, dim=0))
+            all_returns.append(torch.stack(returns_list, dim=0))
 
-        all_advantages = np.stack(all_advantages, axis=2)  # [batch_size, num_steps, 4]
-        all_returns = np.stack(all_returns, axis=2)  # [batch_size, num_steps, 4]
+        # Stack 为 [batch_size, num_steps, 4]
+        all_advantages = torch.stack(all_advantages, dim=2)  # [batch_size, num_steps, 4]
+        all_returns = torch.stack(all_returns, dim=2)  # [batch_size, num_steps, 4]
 
         # 归一化优势
         advantages_mean = all_advantages.mean()
         advantages_std = all_advantages.std() + 1e-8
         all_advantages = (all_advantages - advantages_mean) / advantages_std
 
-        # 转换为tensor
-        actions_type_tensor = torch.LongTensor(actions_type_flat).to(
+        # 转换为tensor（已经是 tensor，不需要转换）
+        actions_type_tensor = torch.from_numpy(actions_type_flat).long().to(
             self.device
         )  # [batch*num_steps, 4]
-        actions_param_tensor = torch.LongTensor(actions_param_flat).to(self.device)
-        advantages_tensor = torch.FloatTensor(
-            all_advantages.reshape(-1, num_agents)
-        ).to(self.device)
-        returns_tensor = torch.FloatTensor(all_returns.reshape(-1, num_agents)).to(
-            self.device
-        )
-        dones_tensor = torch.BoolTensor(dones_flat).to(self.device)
-
-        # PPO更新（简化版，使用现有actor）
-        # 这里我们只训练critic，因为centralized critic是独立的
-        # Actor的训练继续使用现有的update()方法
+        actions_param_tensor = torch.from_numpy(actions_param_flat).long().to(self.device)
+        advantages_tensor = all_advantages.reshape(-1, num_agents)  # [batch*num_steps, 4]
+        returns_tensor = all_returns.reshape(-1, num_agents)  # [batch*num_steps, 4]
 
         # 计算centralized critic损失
-        # 将数据转换为tensor
-        values_tensor = torch.FloatTensor(values_centralized).to(
-            self.device
-        )  # [batch, steps, 4]
-        returns_tensor = torch.FloatTensor(all_returns).to(
-            self.device
-        )  # [batch, steps, 4]
-
-        # Reshape为 [batch*steps, 4]
-        values_flat = values_tensor.reshape(-1, num_agents)  # [batch*steps, 4]
-        returns_flat = returns_tensor.reshape(-1, num_agents)  # [batch*steps, 4]
+        # values_centralized 已经是 tensor 且有梯度！
+        values_flat = values_centralized.reshape(-1, num_agents)  # [batch*steps, 4]
+        returns_flat = returns_tensor  # [batch*steps, 4]
 
         # MSE损失
         critic_loss = ((values_flat - returns_flat) ** 2).mean()

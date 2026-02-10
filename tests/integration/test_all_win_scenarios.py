@@ -615,13 +615,13 @@ def test_scenario_4_all_melded():
 
 def calculate_wall_scenario5_same_suit():
     """计算场景5的牌墙"""
-    p0 = [0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 24, 24, 26]
+    p0 = [0, 0, 0, 1, 2, 3, 4, 5, 6, 14, 15, 24, 24, 26]
     p1 = [9, 10, 11, 12, 13, 14, 25, 26, 27, 28, 29, 30, 31]
-    p2 = [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 26]
+    p2 = [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 32]
     p3 = [2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 
-    drawn_tiles = [0, 0, 25, 24, 23, 24, 26]
-    gong_drawn_tiles = [26]
+    drawn_tiles = [21, 24, 33, 1, 26, 29, 7]
+    gong_drawn_tiles = [6, 0, 7]
 
     all_used = p0 + p1 + p2 + p3 + drawn_tiles + gong_drawn_tiles
     unused_wall = [i for i in range(34)] * 4
@@ -653,56 +653,82 @@ def test_scenario_5_same_suit():
             'dealer_idx': 0,
             'current_player_idx': 0,
             'hands': {
-                0: [0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 24, 24, 26],
+                0: [0, 0, 0, 1, 2, 3, 4, 5, 6, 14, 15, 24, 24, 26],
                 1: [9, 10, 11, 12, 13, 14, 25, 26, 27, 28, 29, 30, 31],
-                2: [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 26],
+                2: [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 32],
                 3: [2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15],
             },
             'wall': wall,
             'special_tiles': {'lazy': 15, 'skins': [14, 13]},
         })
-        # 步骤1：玩家0 赖子杠（开口）
-        .step(1, "玩家0赖子杠")
-            .action(0, ActionType.KONG_LAZY, 0)
+        # 步骤1：玩家0 皮子杠
+        .step(1, "玩家0皮子杠")
+            .action(0, ActionType.KONG_SKIN, 14)
 
         # 步骤2：玩家0 出26（9筒）
         .step(2, "玩家0出26")
             .action(0, ActionType.DISCARD, 26)
 
         # 步骤3-5：玩家1,2,3 依次出牌
-        .step(3, "玩家1出25")
-            .action(1, ActionType.DISCARD, 25)
-        .step(4, "玩家2出24")
-            .action(2, ActionType.DISCARD, 24)
-        .step(5, "玩家3出23")
-            .action(3, ActionType.DISCARD, 23)
+        .step(3, "玩家1出29")
+            .action(1, ActionType.DISCARD, 29)
+        .step(4, "玩家2出32")
+            .action(2, ActionType.DISCARD, 32)
+        .step(5, "玩家3出33")
+            .action(3, ActionType.DISCARD, 33)
 
         # 步骤6：玩家0 出24（8筒）
         .step(6, "玩家0出24")
             .action(0, ActionType.DISCARD, 24)
 
-        # 步骤7：玩家1 出0（1万）
-        .step(7, "玩家1出0")
+        # 步骤7：玩家1 PASS
+        .step(7, "玩家1过")
+            .action(1, ActionType.PASS)
+        # 步骤8：玩家2 PASS
+        .step(8, "玩家2过")
+            .action(2, ActionType.PASS)
+        # 步骤9：玩家1
+        .step(9, "红中杠")
+            .action(1, ActionType.KONG_RED, 0)
+        # 步骤10：玩家1 出0（1万）
+        .step(10, "玩家1出0")
             .action(1, ActionType.DISCARD, 0)
 
-        # 步骤8：玩家0 明杠0（1万）完成开口
-        .step(8, "玩家0明杠0")
+        # 步骤11：玩家0 明杠0（1万）完成开口
+        .step(11, "玩家0明杠0")
             .action(0, ActionType.KONG_EXPOSED, 0)
 
-        # 步骤9：玩家0 出8（9万）
-        .step(9, "玩家0出8")
-            .action(0, ActionType.DISCARD, 8)
+        # 步骤12：玩家0 出24（7筒）
+        .step(12, "玩家0出24")
+            .action(0, ActionType.DISCARD, 24)
 
-        # 步骤10-12：玩家1,2,3 依次PASS
-        .step(10, "玩家1 PASS")
+        # 步骤13：玩家1 PASS
+        .step(13, "玩家1 PASS")
             .action(1, ActionType.PASS)
-        .step(11, "玩家2 PASS")
-            .action(2, ActionType.PASS)
-        .step(12, "玩家3 PASS")
-            .action(3, ActionType.PASS)
+        # 步骤14：玩家2碰24（7筒）
+        .step(14, "玩家2 碰24")
+            .action(2, ActionType.PONG, 0)
+        # 步骤15：玩家2 出26（9筒）
+        .step(15, "玩家2出26")
+            .action(2, ActionType.DISCARD, 26)
+        .step(16, "玩家1 PASS")
+            .action(1, ActionType.PASS)
 
-        # 步骤13：玩家0 摸26（9筒）清一色
-        .step(13, "玩家0摸26清一色")
+        # 步骤17：玩家3 出8（9万）
+        .step(17, "玩家3出8")
+            .action(3, ActionType.DISCARD, 8)
+
+        # # 步骤18：玩家0 右吃8（9万）
+        # .step(18, "玩家0右吃9")
+        #     .action(0, ActionType.CHOW, 2)
+        # # 步骤19：玩家0 出15（7条）
+        # .step(19, "玩家0出15")
+        #     .action(0, ActionType.DISCARD, 15)
+        #
+        # #步骤20：玩家
+
+        # 步骤1：玩家0 和8（9万）清一色
+        .step(18, "玩家0吃和9万清一色")
             .action(0, ActionType.WIN, -1)
             .expect_state(GameStateType.WIN)
 

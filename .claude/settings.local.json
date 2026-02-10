@@ -37,7 +37,16 @@
       "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLMahjong\\\\python.exe\" -m pytest:*)",
       "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLMahjong\\\\python.exe\" -m pytest tests/integration/test_score_display.py -v)",
       "Skill(superpowers:test-driven-development)",
-      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLMahjong\\\\python.exe\" test_score_calc.py)"
+      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLMahjong\\\\python.exe\" test_score_calc.py)",
+      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLMahjong\\\\python.exe\" -m pytest tests/integration/test_capping.py -v)",
+      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLMahjong\\\\python.exe\" -m pytest tests/integration/test_score_settlement_capping.py -v)",
+      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLMahjong\\\\python.exe\" -m pytest tests/integration/ -k \"score or capping\" -v)",
+      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLMahjong\\\\python.exe\" -c \"\nfrom example_mahjong_env import WuhanMahjongEnv\nenv = WuhanMahjongEnv\\(training_phase=1\\)\nobs, _ = env.reset\\(seed=42\\)\n\n# 直接在 build 方法中调用 _build_wall，传入 context.wall\nwall_at_build_time = env.context.wall.copy\\(\\)\nresult = env.state_machine.observation_builder._build_wall\\(wall_at_build_time\\)\nprint\\(''Wall at build time \\(first 20\\):'', list\\(wall_at_build_time\\)[:20]\\)\nprint\\(''_build_wall result \\(first 20\\):'', result[:20]\\)\n\n# 现在检查 build\\(\\) 方法中传入的 context.wall\nprint\\(''Context.wall length at call time:'', len\\(env.context.wall\\)\\)\n\")",
+      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLMahjong\\\\python.exe\" -c \"\nfrom example_mahjong_env import WuhanMahjongEnv\nenv = WuhanMahjongEnv\\(training_phase=1\\)\nobs, _ = env.reset\\(seed=42\\)\n\n# 保存 context.wall 的引用\nwall_before_build = env.context.wall.copy\\(\\)\n\n# 调用 build 方法\nbuilder = env.state_machine.observation_builder\nresult = builder.build\\(0, env.context\\)\n\n# 检查结果\nprint\\(''Wall before build:'', list\\(wall_before_build\\)[:20]\\)\nprint\\(''Wall in observation \\(first 20\\):'', result[''wall''][:20]\\)\nprint\\(''Are they equal?'', list\\(wall_before_build\\)[:20] == list\\(result[''wall''][:20]\\)\\)\n\")",
+      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLMahjong\\\\python.exe\" -c \"\nfrom example_mahjong_env import WuhanMahjongEnv\nenv = WuhanMahjongEnv\\(training_phase=1\\)\nobs, _ = env.reset\\(seed=42\\)\n\n# 检查 build 方法中对 context.wall 的处理\nimport inspect\nbuilder = env.state_machine.observation_builder\n\n# 获取 build 方法的源代码\nsource = inspect.getsource\\(builder.build\\)\n# 找到 _build_wall 调用的行\nfor i, line in enumerate\\(source.split\\(''\\\\n''\\)\\):\n    if ''_build_wall'' in line:\n        print\\(f''Line {i}: {line}''\\)\n        print\\(f''Previous line: {source.split\\(chr\\(10\\)\\)[i-1] if i > 0 else \"\"N/A\"\"}''\\)\n\")",
+      "Bash(claude plugin marketplace add:*)",
+      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLENVMahjong\\\\python.exe\" -m pytest:*)",
+      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLMahjong\\\\python.exe\" -m pytest tests/unit/test_network_obs_fix.py -v -s)"
     ]
   }
 }
