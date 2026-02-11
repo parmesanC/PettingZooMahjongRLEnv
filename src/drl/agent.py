@@ -6,12 +6,14 @@ NFSP 智能体封装
 
 import numpy as np
 import torch
-from typing import Tuple, Dict, Optional
+from typing import Tuple, Dict, Optional, List
 import random
+import os
 
 from src.mahjong_rl.agents.base import PlayerStrategy
 from src.drl.nfsp import NFSP
 from src.drl.config import Config
+from src.drl.network import ActorCriticNetwork, AveragePolicyNetwork
 
 
 class NFSPAgent(PlayerStrategy):
@@ -496,3 +498,225 @@ class RandomOpponent:
     def reset(self):
         """重置（随机策略无需重置）"""
         pass
+
+
+class HistoricalPolicyOpponent:
+    """
+    历史策略对手
+
+    只包含推理所需的网络权重，不包含训练逻辑。
+    用于 NFSP 自对弈期，从策略池加载的历史策略。
+    """
+
+    def __init__(self, policy_path: str, device: str = "cuda"):
+        """
+        初始化历史策略对手
+
+        Args:
+            policy_path: 策略文件路径（.pth）
+            device: 计算设备
+        """
+        self.device = device
+        self.policy_path = policy_path
+        self.episode_number = self._extract_episode_number(policy_path)
+
+        # 创建网络（只用于推理，不包含训练组件）
+        # 注意：需要从配置或文件中读取网络架构参数
+        # 这里使用默认参数，实际加载时会从文件中恢复权重
+        self.best_response_net = ActorCriticNetwork(
+            observation_space=None,  # 从文件恢复
+            action_space=None,       # 从文件恢复
+            hidden_dim=256,
+            dropout=0.1,
+        ).to(device)
+
+        self.average_policy_net = AveragePolicyNetwork(
+            observation_space=None,
+            action_space=None,
+            hidden_dim=256,
+            dropout=0.1,
+        ).to(device)
+
+        # 加载权重
+        self._load_weights()
+
+        # 设置为评估模式
+        self.best_response_net.eval()
+        self.average_policy_net.eval()
+
+    def _extract_episode_number(self, policy_path: str) -> int:
+        """从策略文件路径提取 episode 编号"""
+        import re
+        match = re.search(r'policy_(\d+)\.pth', policy_path)
+        if match:
+            return int(match.group(1))
+        return 0
+
+    def _load_weights(self):
+        """从 .pth 文件加载网络权重"""
+        try:
+            checkpoint = torch.load(self.policy_path, map_location=self.device)
+
+            # 加载 BR 网络
+            if 'best_response_net' in checkpoint:
+                self.best_response_net.load_state_dict(checkpoint['best_response_net'])
+            elif 'model_state_dict' in checkpoint:
+                self.best_response_net.load_state_dict(checkpoint['model_state_dict'])
+
+            # 加载 π̄ 网络
+            if 'average_policy_net' in checkpoint:
+                self.average_policy_net.load_state_dict(checkpoint['average_policy_net'])
+
+        except Exception as e:
+            print(f"[警告] 加载策略失败 {self.policy_path}: {e}")
+            raise
+
+    def choose_action(
+        self,
+        obs: Dict[str, np.ndarray],
+        action_mask: np.ndarray,
+        eta: float = 0.2
+    ) -> Tuple[int, int]:
+        """
+        选择动作（根据 η 概率混合 BR 和 π̄）
+
+        Args:
+            obs: 观测字典
+            action_mask: 动作掩码
+            eta: 使用 BR 的概率（默认 0.2）
+
+        Returns:
+            (action_type, action_param) 元组
+        """
+        import torch.nn.functional as F
+
+        # 决定使用哪个网络
+        use_br = random.random() < eta
+
+        # 准备观测张量
+        obs_tensor = self._prepare_obs(obs)
+        action_mask_tensor = torch.FloatTensor(action_mask).unsqueeze(0).to(self.device)
+
+        with torch.no_grad():
+            if use_br:
+                # 使用最佳响应网络
+                action_type, action_param, _, _, _ = (
+                    self.best_response_net.get_action_and_value(
+                        obs_tensor, action_mask_tensor
+                    )
+                )
+                action_type = action_type.item()
+                action_param = action_param.item()
+            else:
+                # 使用平均策略网络
+                type_probs, param_probs = self.average_policy_net.get_action_probs(
+                    obs_tensor, action_mask_tensor
+                )
+
+                # 采样动作
+                type_dist = torch.distributions.Categorical(type_probs)
+                param_dist = torch.distributions.Categorical(param_probs)
+
+                action_type = type_dist.sample().item()
+                action_param = param_dist.sample().item()
+
+        return action_type, action_param
+
+    def _prepare_obs(self, obs: Dict[str, np.ndarray]) -> Dict[str, torch.Tensor]:
+        """将观测字典转换为张量字典"""
+        tensor_obs = {}
+        for key, value in obs.items():
+            if isinstance(value, dict):
+                tensor_obs[key] = self._prepare_obs(value)
+            elif isinstance(value, np.ndarray):
+                tensor_val = torch.FloatTensor(value).to(self.device)
+                if tensor_val.dim() == 1:
+                    tensor_val = tensor_val.unsqueeze(0)
+                elif tensor_val.dim() == 0:
+                    tensor_val = tensor_val.unsqueeze(0).unsqueeze(0)
+                tensor_obs[key] = tensor_val
+            else:
+                tensor_val = torch.FloatTensor([value]).unsqueeze(0).to(self.device)
+                tensor_obs[key] = tensor_val
+        return tensor_obs
+
+
+class PolicyPoolManager:
+    """
+    策略池管理器
+
+    负责策略的添加、加载和采样。维护已加载到内存的历史策略对手列表。
+    """
+
+    def __init__(self, pool_size: int = 10, device: str = "cuda"):
+        """
+        初始化策略池管理器
+
+        Args:
+            pool_size: 最大策略数量（默认 10）
+            device: 计算设备
+        """
+        self.pool_size = pool_size
+        self.device = device
+        self.policies: List[HistoricalPolicyOpponent] = []
+        self.policy_paths: List[str] = []
+
+    def add_policy(self, policy_path: str) -> bool:
+        """
+        添加新策略到池中
+
+        如果池已满，移除最旧的策略。
+
+        Args:
+            policy_path: 策略文件路径
+
+        Returns:
+            是否成功添加
+        """
+        try:
+            # 加载策略到内存
+            opponent = HistoricalPolicyOpponent(policy_path, self.device)
+
+            # 添加到池
+            self.policies.append(opponent)
+            self.policy_paths.append(policy_path)
+
+            # 超过容量时移除最旧的
+            if len(self.policies) > self.pool_size:
+                old_opponent = self.policies.pop(0)
+                old_path = self.policy_paths.pop(0)
+
+                # 清理文件
+                if os.path.exists(old_path):
+                    try:
+                        os.remove(old_path)
+                    except Exception as e:
+                        print(f"[警告] 无法删除旧策略文件 {old_path}: {e}")
+
+                # 释放内存
+                del old_opponent
+
+            return True
+
+        except Exception as e:
+            print(f"[错误] 添加策略失败 {policy_path}: {e}")
+            return False
+
+    def sample_opponent(self) -> Optional[HistoricalPolicyOpponent]:
+        """
+        随机采样一个对手策略
+
+        Returns:
+            随机选择的历史策略对手，池为空时返回 None
+        """
+        if not self.policies:
+            return None
+        return random.choice(self.policies)
+
+    def is_empty(self) -> bool:
+        """检查策略池是否为空"""
+        return len(self.policies) == 0
+
+    def size(self) -> int:
+        """返回当前策略数量"""
+        return len(self.policies)

@@ -82,8 +82,15 @@ class TrainingConfig:
     full_training_episodes: int = 20_000_000  # 完整训练（2000万局）
     mode: str = 'full_training'  # 训练模式：'quick_test' 或 'full_training'
     total_episodes: int = 5_000_000  # 总局数（旧字段，废弃）
-    switch_point: int = 1_000_000  # 切换对手的局数（前期随机→后期历史）
-    
+
+    # 探索期和策略池配置（NFSP 对手选择）
+    exploration_episodes: int = 200_000  # 探索期：前 20 万局使用随机对手
+    policy_pool_size: int = 10  # 策略池大小：保留最近 10 个策略
+    policy_save_interval: int = 1000  # 策略保存间隔：每 1000 局保存一次
+
+    # 兼容旧代码（废弃字段，使用 exploration_episodes）
+    switch_point: int = 200_000  # 切换对手的局数（前期随机→后期历史）- 已废弃
+
     # 评估配置
     eval_interval: int = 1000  # 每多少局评估一次
     eval_games: int = 100  # 每次评估对战多少局

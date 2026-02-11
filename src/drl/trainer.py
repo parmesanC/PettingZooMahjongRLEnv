@@ -16,9 +16,10 @@ import torch
 from typing import Dict, List, Optional, Tuple
 from collections import deque
 import random
+from tqdm import tqdm
 
 from example_mahjong_env import WuhanMahjongEnv
-from src.drl.agent import NFSPAgentPool, NFSPAgentWrapper, RandomOpponent
+from src.drl.agent import NFSPAgentPool, NFSPAgentWrapper, RandomOpponent, PolicyPoolManager
 from src.drl.config import Config, get_default_config, get_quick_test_config
 from src.drl.curriculum import CurriculumScheduler
 
@@ -77,9 +78,14 @@ class NFSPTrainer:
         # 随机对手（用于前期训练和评估）
         self.random_opponent = RandomOpponent()
 
-        # 历史策略池（用于后期自对弈）
-        self.policy_pool = []
-        self.policy_pool_size = 10  # 保留最近10个策略
+        # 策略池管理器（用于后期自对弈）
+        self.policy_pool_manager = PolicyPoolManager(
+            pool_size=self.config.training.policy_pool_size,
+            device=device
+        )
+
+        # 探索期配置
+        self.exploration_episodes = self.config.training.exploration_episodes
 
         # 课程学习调度器
         self.curriculum = CurriculumScheduler(
@@ -134,6 +140,15 @@ class NFSPTrainer:
         print("=" * 80)
 
         try:
+            # 创建进度条
+            pbar = tqdm(
+                total=self.config.training.actual_total_episodes,
+                desc="Training",
+                unit="ep",
+                ncols=100,
+                initial=self.episode_count,
+            )
+
             while self.episode_count < self.config.training.actual_total_episodes:
                 # 更新课程学习阶段
                 phase, progress = self.curriculum.get_phase(self.episode_count)
@@ -144,10 +159,14 @@ class NFSPTrainer:
                 self.env.training_phase = phase
                 self.env.training_progress = progress
 
+                # 更新进度条描述
+                pbar.set_description(f"Ep {self.episode_count:,} | Phase {phase} | Progress {progress:.1%}")
+
                 # 运行一局自对弈
                 episode_stats = self._run_episode()
 
                 self.episode_count += 1
+                pbar.update(1)
 
                 # 训练（传递当前训练阶段）
                 train_stats = self.agent_pool.train_all(
@@ -158,15 +177,24 @@ class NFSPTrainer:
                 if self.episode_count % self.config.training.eval_interval == 0:
                     eval_stats = self._evaluate()
                     self._log_stats(episode_stats, train_stats, eval_stats)
-                    self._print_progress(train_stats, eval_stats)
+                    # 更新进度条后缀显示统计信息
+                    if train_stats and "policy_loss" in train_stats:
+                        pbar.set_postfix({
+                            "loss": f"{train_stats.get('policy_loss', 0):.4f}",
+                            "win_rate": f"{eval_stats.get('win_rate', 0):.1%}" if eval_stats else "N/A"
+                        })
 
                 # 定期保存
                 if self.episode_count % self.config.training.actual_save_interval == 0:
                     self._save_checkpoint()
                     self._add_to_policy_pool()
 
+            pbar.close()
+
         except KeyboardInterrupt:
             print("\n训练被中断")
+            if 'pbar' in locals():
+                pbar.close()
         finally:
             # 保存最终模型
             self._save_checkpoint(is_final=True)
@@ -184,12 +212,19 @@ class NFSPTrainer:
         obs, _ = self.env.reset()
 
         # 确定对手类型
-        if self.episode_count < self.config.training.switch_point:
-            # 前期：使用随机对手
+        if self.episode_count < self.exploration_episodes:
+            # 探索期：使用随机对手
             use_random_opponents = True
         else:
-            # 后期：使用历史策略
+            # 自对弈期：使用策略池中的历史策略
             use_random_opponents = False
+
+        # [NEW] 自对弈期：为每个位置预选对手
+        episode_opponents = [None] * 4  # 4 个位置的对手
+        if not use_random_opponents:
+            for i in range(4):
+                opponent = self.policy_pool_manager.sample_opponent()
+                episode_opponents[i] = opponent  # None 表示池为空，使用当前策略
 
         # [NEW] Step-by-step data collection for centralized buffer
         # 每个时间步存储4个agents的数据
@@ -213,7 +248,6 @@ class NFSPTrainer:
             obs, reward, terminated, truncated, info = self.env.last()
             agent_idx = int(agent_name.split("_")[1])
 
-            # [诊断] 收集最终观测
             all_agents_observations[agent_name] = obs
 
             # 从观测字典中获取 action_mask
@@ -224,18 +258,28 @@ class NFSPTrainer:
 
             # 选择动作
             if use_random_opponents:
+                # 探索期：使用随机对手
                 action_type, action_param = self.random_opponent.choose_action(
                     obs, action_mask
                 )
-                log_prob, value = 0.0, 0.0  # 随机对手不提供这些值
+                log_prob, value = 0.0, 0.0
             else:
-                agent = self.agent_pool.get_agent(agent_idx)
-                action_type, action_param = agent.choose_action(obs, action_mask)
-                # 尝试获取训练信息
-                if hasattr(agent, 'get_training_info'):
-                    log_prob, value = agent.get_training_info()
+                # 自对弈期：使用预选的对手
+                opponent = episode_opponents[agent_idx]
+                if opponent is None:
+                    # 策略池为空，降级使用当前策略
+                    agent = self.agent_pool.get_agent(agent_idx)
+                    action_type, action_param = agent.choose_action(obs, action_mask)
+                    if hasattr(agent, 'get_training_info'):
+                        log_prob, value = agent.get_training_info()
+                    else:
+                        log_prob, value = 0.0, 0.0
                 else:
-                    log_prob, value = 0.0, 0.0
+                    # 使用历史策略对手
+                    action_type, action_param = opponent.choose_action(
+                        obs, action_mask, eta=self.config.nfsp.eta
+                    )
+                    log_prob, value = 0.0, 0.0  # 历史策略不提供训练信息
 
             # [NEW] 收集step数据（用于集中式critic训练）
             # Deep copy obs以避免引用问题
@@ -265,13 +309,6 @@ class NFSPTrainer:
                     winner = info["winner"]
                 elif "winners" in info and info["winners"]:
                     winner = info["winners"][0]
-
-        # [诊断] 输出：所有智能体的全局观测 (仅在第一次输出)
-        if self.episode_count == 0:
-            print(f"\n[诊断] Episode {self.episode_count}:")
-            print(f"  总步数: {episode_steps}")
-            print(f"  收集到的数据点数: {len(step_data)}")
-            print(f"  收集到的观测键: {list(all_agents_observations.keys())}")
 
         # 返回回合统计
         episode_stats = {
@@ -517,19 +554,19 @@ class NFSPTrainer:
 
     def _add_to_policy_pool(self):
         """将当前策略添加到历史池"""
-        # 保存当前平均策略网络
+        # 保存当前策略
         policy_path = os.path.join(
             self.checkpoint_dir, f"policy_{self.episode_count}.pth"
         )
         self.agent_pool.save(policy_path)
 
-        self.policy_pool.append(policy_path)
+        # 添加到策略池管理器（会自动加载到内存并管理大小）
+        success = self.policy_pool_manager.add_policy(policy_path)
 
-        # 限制池大小
-        if len(self.policy_pool) > self.policy_pool_size:
-            old_policy = self.policy_pool.pop(0)
-            if os.path.exists(old_policy):
-                os.remove(old_policy)
+        if success:
+            pool_size = self.policy_pool_manager.size()
+            print(f"  [Policy Pool] Added policy at episode {self.episode_count}, "
+                  f"pool size: {pool_size}/{self.policy_pool_manager.pool_size}")
 
     def _save_training_summary(self):
         """保存训练总结"""
