@@ -13,6 +13,57 @@ from collections import deque
 import random
 
 
+def create_default_observation() -> Dict[str, np.ndarray]:
+    """
+    创建默认的观测字典用于填充
+
+    Returns:
+        包含所有必需字段的观测字典，值均为0
+    """
+    return {
+        'global_hand': np.zeros(136, dtype=np.int64),
+        'private_hand': np.zeros(34, dtype=np.int64),
+        'discard_pool_total': np.zeros(34, dtype=np.int64),
+        'wall': np.zeros(82, dtype=np.int64),
+        'melds': {
+            'action_types': np.zeros(16, dtype=np.int64),
+            'tiles': np.zeros(256, dtype=np.int64),
+            'group_indices': np.zeros(32, dtype=np.int64),
+        },
+        'action_history': {
+            'types': np.zeros(80, dtype=np.int64),
+            'params': np.zeros(80, dtype=np.int64),
+            'players': np.zeros(80, dtype=np.int64),
+        },
+        'special_gangs': np.zeros(12, dtype=np.int64),
+        'current_player': np.zeros(1, dtype=np.int64),
+        'fan_counts': np.zeros(4, dtype=np.int64),
+        'special_indicators': np.zeros(2, dtype=np.int64),
+        'remaining_tiles': np.zeros(1, dtype=np.int64),
+        'dealer': np.zeros(1, dtype=np.int64),
+        'current_phase': np.zeros(1, dtype=np.int64),
+    }
+
+
+def deep_copy_observation(obs: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+    """
+    深度复制观测字典（包括嵌套的dict）
+
+    Args:
+        obs: 要复制的观测字典
+
+    Returns:
+        深度复制后的观测字典
+    """
+    result = {}
+    for key, value in obs.items():
+        if isinstance(value, dict):
+            result[key] = {k: v.copy() for k, v in value.items()}
+        else:
+            result[key] = value.copy()
+    return result
+
+
 class RolloutBuffer:
     """
     MAPPO 轨迹缓冲区
@@ -719,14 +770,33 @@ class CentralizedRolloutBuffer:
             batch_values.append(episode_values)
             batch_dones.append(episode_dones)
 
-        # 转换为numpy数组
-        # batch_all_observations 保持为 list（包含嵌套的 dict）
-        # 其他字段转换为 numpy array
-        batch_actions_type = np.array(batch_actions_type, dtype=np.int64)
-        batch_actions_param = np.array(batch_actions_param, dtype=np.int64)
-        batch_rewards = np.array(batch_rewards, dtype=np.float32)
+        # Pad episodes to the same length before converting to numpy arrays
+        # Different episodes may have different lengths (e.g., fast wins vs long games)
+        max_num_steps = max(len(ep[0]) for ep in batch_actions_type) if batch_actions_type else 0
 
-        # Handle values - filter out None episodes
+        # Helper function to pad an episode's data
+        def pad_episode_data(episode_data, pad_value=0):
+            """Pad episode data to max_num_steps."""
+            num_agents = len(episode_data)
+            padded = []
+            for agent_idx in range(num_agents):
+                agent_steps = episode_data[agent_idx]
+                current_len = len(agent_steps)
+                if current_len < max_num_steps:
+                    # Pad with pad_value
+                    padded_steps = list(agent_steps) + [pad_value] * (max_num_steps - current_len)
+                else:
+                    padded_steps = agent_steps
+                padded.append(padded_steps)
+            return padded
+
+        # Pad all episodes to the same length
+        batch_actions_type = [pad_episode_data(ep, 0) for ep in batch_actions_type]
+        batch_actions_param = [pad_episode_data(ep, 0) for ep in batch_actions_param]
+        batch_rewards = [pad_episode_data(ep, 0.0) for ep in batch_rewards]
+        batch_dones = [pad_episode_data(ep, False) for ep in batch_dones]
+
+        # Handle values - filter out None episodes and pad
         if batch_values and any(v is not None for v in batch_values):
             # Only convert non-None values
             batch_values_filtered = []
@@ -734,21 +804,44 @@ class CentralizedRolloutBuffer:
                 if v is not None:
                     batch_values_filtered.append(v)
             if batch_values_filtered:
-                batch_values = np.array(batch_values_filtered, dtype=np.float32)
+                batch_values = [pad_episode_data(ep, 0.0) for ep in batch_values_filtered]
             else:
                 batch_values = None
         else:
             batch_values = None
 
+        # Pad batch_all_observations to max_num_steps
+        # episode_all_observations structure: [num_steps, 4, Dict]
+        # We need to pad each episode to [max_num_steps, 4, Dict]
+        default_obs = create_default_observation()
+        batch_all_observations_padded = []
+        for episode_obs in batch_all_observations:
+            num_steps = len(episode_obs)
+            if num_steps < max_num_steps:
+                # Pad with default observations for missing timesteps
+                # Each timestep has 4 agents, so we need 4 copies of default_obs
+                padded_episode = episode_obs + [[deep_copy_observation(default_obs) for _ in range(4)] for _ in range(max_num_steps - num_steps)]
+            else:
+                padded_episode = episode_obs
+            batch_all_observations_padded.append(padded_episode)
+        batch_all_observations = batch_all_observations_padded
+
+        # Now convert to numpy arrays with consistent shapes
+        # batch_actions_type: List[List[List[int]]] -> [batch_size, 4, max_num_steps]
+        batch_actions_type = np.array(batch_actions_type, dtype=np.int64)
+        batch_actions_param = np.array(batch_actions_param, dtype=np.int64)
+        batch_rewards = np.array(batch_rewards, dtype=np.float32)
+        if batch_values is not None:
+            batch_values = np.array(batch_values, dtype=np.float32)
         batch_dones = np.array(batch_dones, dtype=np.bool_)
 
         return (
-            batch_all_observations,  # [batch_size, num_steps, 4, Dict]
-            batch_actions_type,  # [batch_size, num_steps, 4] numpy array
-            batch_actions_param,  # [batch_size, num_steps, 4] numpy array
-            batch_rewards,  # [batch_size, num_steps, 4] numpy array
-            batch_values,  # [batch_size_filtered, num_steps, 4] numpy array or None
-            batch_dones,  # [batch_size, num_steps, 4] numpy array
+            batch_all_observations,  # [batch_size, max_num_steps, 4, Dict]
+            batch_actions_type,  # [batch_size, 4, max_num_steps] numpy array - will be transposed in mappo.py
+            batch_actions_param,  # [batch_size, 4, max_num_steps] numpy array - will be transposed in mappo.py
+            batch_rewards,  # [batch_size, 4, max_num_steps] numpy array - will be transposed in mappo.py
+            batch_values,  # [batch_size_filtered, 4, max_num_steps] numpy array or None - will be transposed in mappo.py
+            batch_dones,  # [batch_size, 4, max_num_steps] numpy array - will be transposed in mappo.py
         )
 
     def get_decentralized_batch(

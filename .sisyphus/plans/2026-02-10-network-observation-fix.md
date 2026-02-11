@@ -2,7 +2,19 @@
 
 ## 执行摘要
 
-通过系统性分析发现 **8 个 P0 问题**（阻塞训练）和 **12 个 P1 问题**（影响效果），以及多个优化建议。
+通过系统性分析发现 **10 个 P0 问题**（阻塞训练）和 **12 个 P1 问题**（影响效果），以及多个优化建议。
+
+**修复进度**：
+- ✅ P0-1: StateEncoder 输入维度错误 (10 维，不是 13 维)
+- ✅ P0-2: 标量值维度处理错误 (_prepare_obs)
+- ✅ P0-3: get_centralized_batch 索引错误
+- ✅ P0-4: get_centralized_batch 变量遮蔽
+- ✅ P0-5: discard_tiles 拼写错误
+- ✅ P0-6: global_hand 字段缺失
+- ✅ P0-7: get_centralized_batch 返回类型
+- ✅ P0-8: 使用错误的 buffer 字段
+- ✅ P0-9: Episode 长度不一致导致 numpy 转换失败
+- ✅ P0-10: Padding 观测缺少必需字段
 
 ---
 
@@ -74,6 +86,82 @@ def _prepare_obs(self, obs: Dict[str, np.ndarray]) -> Dict[str, torch.Tensor]:
 ### P0-8: 使用错误的 buffer 字段
 **位置**: `src/drl/trainer.py:329`
 **问题**: 访问 `shared_nfsp.buffer.centralized_buffer` 应该是 `agent_pool.centralized_buffer`
+**状态**: ✅ 已修复
+
+### P0-9: Episode 长度不一致导致 numpy 转换失败
+**位置**: `src/drl/buffer.py:725`
+**问题**: 不同 episode 的 `num_steps` 不同，无法转换为单一 numpy 数组
+**根因**: `np.array(batch_actions_type)` 当 episode 长度不一致时失败
+**修复**: 实现 episode padding 到统一长度
+```python
+# 添加 helper 函数
+def pad_episode_data(episode_data, pad_value=0):
+    """Pad episode data to max_num_steps."""
+    num_agents = len(episode_data)
+    padded = []
+    for agent_idx in range(num_agents):
+        agent_steps = episode_data[agent_idx]
+        current_len = len(agent_steps)
+        if current_len < max_num_steps:
+            padded_steps = list(agent_steps) + [pad_value] * (max_num_steps - current_len)
+        else:
+            padded_steps = agent_steps
+        padded.append(padded_steps)
+    return padded
+
+# 对所有 episode 数据进行 padding
+max_num_steps = max(len(ep[0]) for ep in batch_actions_type)
+batch_actions_type = [pad_episode_data(ep, 0) for ep in batch_actions_type]
+# ... 其他字段类似处理
+```
+**状态**: ✅ 已修复
+
+### P0-10: Padding 观测缺少必需字段导致编码失败
+**位置**: `src/drl/buffer.py:715`
+**问题**: Padding 时使用空 dict `{}`，缺少 `global_hand` 等必需字段
+**根因**: ObservationEncoder 期望 13 个字段，但 padding 只提供空 dict
+**修复**: 创建包含所有必需字段的默认观测
+```python
+def create_default_observation() -> Dict[str, np.ndarray]:
+    """创建默认的观测字典用于填充"""
+    return {
+        'global_hand': np.zeros(136, dtype=np.int64),
+        'private_hand': np.zeros(34, dtype=np.int64),
+        'discard_pool_total': np.zeros(34, dtype=np.int64),
+        'wall': np.zeros(82, dtype=np.int64),
+        'melds': {
+            'action_types': np.zeros(16, dtype=np.int64),
+            'tiles': np.zeros(256, dtype=np.int64),
+            'group_indices': np.zeros(32, dtype=np.int64),
+        },
+        'action_history': {
+            'types': np.zeros(80, dtype=np.int64),
+            'params': np.zeros(80, dtype=np.int64),
+            'players': np.zeros(80, dtype=np.int64),
+        },
+        'special_gangs': np.zeros(12, dtype=np.int64),
+        'current_player': np.zeros(1, dtype=np.int64),
+        'fan_counts': np.zeros(4, dtype=np.int64),
+        'special_indicators': np.zeros(2, dtype=np.int64),
+        'remaining_tiles': np.zeros(1, dtype=np.int64),
+        'dealer': np.zeros(1, dtype=np.int64),
+        'current_phase': np.zeros(1, dtype=np.int64),
+    }
+
+def deep_copy_observation(obs: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+    """深度复制观测字典（包括嵌套的dict）"""
+    result = {}
+    for key, value in obs.items():
+        if isinstance(value, dict):
+            result[key] = {k: v.copy() for k, v in value.items()}
+        else:
+            result[key] = value.copy()
+    return result
+
+# Padding 时使用默认观测
+default_obs = create_default_observation()
+padded_episode = episode_obs + [[deep_copy_observation(default_obs) for _ in range(4)] for _ in range(max_num_steps - num_steps)]
+```
 **状态**: ✅ 已修复
 
 ---

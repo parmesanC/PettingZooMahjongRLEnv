@@ -46,7 +46,9 @@
       "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLMahjong\\\\python.exe\" -c \"\nfrom example_mahjong_env import WuhanMahjongEnv\nenv = WuhanMahjongEnv\\(training_phase=1\\)\nobs, _ = env.reset\\(seed=42\\)\n\n# 检查 build 方法中对 context.wall 的处理\nimport inspect\nbuilder = env.state_machine.observation_builder\n\n# 获取 build 方法的源代码\nsource = inspect.getsource\\(builder.build\\)\n# 找到 _build_wall 调用的行\nfor i, line in enumerate\\(source.split\\(''\\\\n''\\)\\):\n    if ''_build_wall'' in line:\n        print\\(f''Line {i}: {line}''\\)\n        print\\(f''Previous line: {source.split\\(chr\\(10\\)\\)[i-1] if i > 0 else \"\"N/A\"\"}''\\)\n\")",
       "Bash(claude plugin marketplace add:*)",
       "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLENVMahjong\\\\python.exe\" -m pytest:*)",
-      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLMahjong\\\\python.exe\" -m pytest tests/unit/test_network_obs_fix.py -v -s)"
+      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLMahjong\\\\python.exe\" -m pytest tests/unit/test_network_obs_fix.py -v -s)",
+      "Bash(set:*)",
+      "Bash(\"D:\\\\DATA\\\\Development\\\\Anaconda\\\\envs\\\\PettingZooRLMahjong\\\\python.exe\" train_nfsp.py --quick-test)"
     ]
   }
 }

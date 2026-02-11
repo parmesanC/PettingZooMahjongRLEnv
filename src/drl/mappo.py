@@ -404,13 +404,6 @@ class MAPPO:
         batch_size, num_agents, num_steps = actions_type.shape  # 注意：格式是 [batch, agents, steps]
         num_agents = 4
 
-        # Debug: 打印数据形状
-        if self.training_step == 0:
-            print(f"[DEBUG] actions_type.shape: {actions_type.shape}")
-            print(f"[DEBUG] rewards.shape: {rewards.shape}")
-            print(f"[DEBUG] dones.shape: {dones.shape}")
-            print(f"[DEBUG] values.shape: {values.shape if values is not None else 'None'}")
-
         # 转置数据：[batch, agents, steps] -> [batch, steps, agents]
         actions_type = np.transpose(actions_type, (0, 2, 1))  # [batch_size, num_steps, num_agents]
         actions_param = np.transpose(actions_param, (0, 2, 1))

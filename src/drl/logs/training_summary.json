@@ -1,6 +1,6 @@
 {
-  "total_episodes": 1,
-  "total_time": 0.2931091785430908,
+  "total_episodes": 25,
+  "total_time": 200.54272985458374,
   "final_eval": null,
   "best_win_rate": 0,
   "config": {
@@ -10,4 +10,4 @@
     "hidden_dim": 128,
     "transformer_layers": 2
   }
-}
+}、
