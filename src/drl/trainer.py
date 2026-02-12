@@ -185,8 +185,13 @@ class NFSPTrainer:
                 self.current_progress = progress
 
                 # 更新环境训练阶段
-                self.env.training_phase = phase
-                self.env.training_progress = progress
+                if self.env is not None:
+                    self.env.training_phase = phase
+                    self.env.training_progress = progress
+                if self.vec_env is not None:
+                    for env in self.vec_env.envs:
+                        env.training_phase = phase
+                        env.training_progress = progress
 
                 # 更新进度条描述
                 pbar.set_description(f"Ep {self.episode_count:,} | Phase {phase} | Progress {progress:.1%}")
@@ -446,8 +451,13 @@ class NFSPTrainer:
             'done': False,   # 稍后更新
         })
 
-        # 执行动作
-        env = self.env.step((action_type, action_param))
+        # 执行动作（支持单环境和向量化模式）
+        if self.use_vectorized_env:
+            # 向量化模式：使用 vec_env.step(env_idx, action)
+            obs, reward, terminated, truncated, info = self.vec_env.step(env_idx, (action_type, action_param))
+        else:
+            # 单环境模式：使用 env.step(action)
+            obs, reward, terminated, truncated, info = self.env.step((action_type, action_param))
 
         # 更新奖励
         state['rewards'][state['current_agent']] += reward
@@ -579,7 +589,7 @@ class NFSPTrainer:
         # 5. 返回所有环境的统计
         return [self._finalize_episode(s) for s in env_states]
 
-    def _populate_centralized_buffer_from_steps(self, step_data: List[Dict]):
+    def _populate_centralized_buffer_from_steps(self, step_data: List[Dict], env_idx: int = None):
         """
         从收集的step数据填充CentralizedRolloutBuffer
 
@@ -587,6 +597,7 @@ class NFSPTrainer:
             step_data: List of dicts, each containing data for one agent action
                       Keys: agent_idx, obs, action_mask, action_type, action_param,
                             log_prob, reward, value, done
+            env_idx: 环境索引（向量化模式下使用）
         """
         import numpy as np
 
@@ -597,8 +608,13 @@ class NFSPTrainer:
         # global_hand 包含所有 4 个 agents 的手牌，用于 centralized critic
         global_obs = None
         try:
-            context = self.env.unwrapped.context
-            obs_builder = self.env.unwrapped.state_machine.observation_builder
+            # 根据模式选择环境
+            if self.use_vectorized_env and env_idx is not None:
+                env = self.vec_env.envs[env_idx]
+            else:
+                env = self.env
+            context = env.unwrapped.context
+            obs_builder = env.unwrapped.state_machine.observation_builder
             global_obs = obs_builder.build_global_observation(context, training_phase=self.current_phase)
         except Exception as e:
             # 如果无法获取全局观测，记录警告但继续
