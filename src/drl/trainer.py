@@ -36,6 +36,14 @@ class NFSPTrainer:
     - 每10000局保存一次模型
     """
 
+
+    def close(self):
+        """关闭训练器和环境"""
+        if hasattr(self, 'env') and self.env is not None:
+            self.env.close()
+        if hasattr(self, 'vec_env') and self.vec_env is not None:
+            self.vec_env.close()
+
     def __init__(
         self,
         config: Optional[Config] = None,
@@ -43,6 +51,8 @@ class NFSPTrainer:
         log_dir: str = "logs",
         checkpoint_dir: str = "checkpoints",
         checkpoint_path: Optional[str] = None,
+        use_vectorized_env: bool = False,
+        num_envs: int = 4,
     ):
         """
         初始化训练器
@@ -58,17 +68,36 @@ class NFSPTrainer:
         self.device = device
         self.log_dir = log_dir
         self.checkpoint_dir = checkpoint_dir
+        self.use_vectorized_env = use_vectorized_env
+        self.num_envs = num_envs
 
         # 创建目录
         os.makedirs(log_dir, exist_ok=True)
         os.makedirs(checkpoint_dir, exist_ok=True)
 
-        # 创建环境
-        self.env = WuhanMahjongEnv(
-            render_mode=None,
-            training_phase=self.config.mahjong.training_phase,
-            enable_logging=False,
-        )
+        # 创建环境（单个或向量化）
+        if use_vectorized_env:
+            # 使用向量化环境
+            from src.drl.vec_env import make_vec_env, EnvFactory
+
+            env_factory = EnvFactory(
+                env_type="WuhanMahjongEnv",
+                render_mode=None,
+                training_phase=self.config.mahjong.training_phase,
+                enable_logging=False,
+            )
+            self.vec_env = make_vec_env(
+                env_factory, num_envs=num_envs, use_subprocess=False
+            )
+            self.env = None  # 向量化模式下不使用单环境
+        else:
+            # 使用单个环境
+            self.env = WuhanMahjongEnv(
+                render_mode=None,
+                training_phase=self.config.mahjong.training_phase,
+                enable_logging=False,
+            )
+            self.vec_env = None
 
         # 创建 NFSP 智能体池（参数共享）
         self.agent_pool = NFSPAgentPool(
@@ -162,11 +191,20 @@ class NFSPTrainer:
                 # 更新进度条描述
                 pbar.set_description(f"Ep {self.episode_count:,} | Phase {phase} | Progress {progress:.1%}")
 
-                # 运行一局自对弈
-                episode_stats = self._run_episode()
-
-                self.episode_count += 1
-                pbar.update(1)
+                # 根据配置选择训练方式
+                if self.use_vectorized_env:
+                    # 向量化模式：运行一批回合
+                    episode_stats_list = self._run_episode_vectorized()
+                    # 使用第一个环境的统计作为代表
+                    episode_stats = episode_stats_list[0] if episode_stats_list else {}
+                    # 更新进度条（已递增 num_envs 次）
+                    self.episode_count += len(episode_stats_list)
+                    pbar.update(len(episode_stats_list))
+                else:
+                    # 单环境模式：运行一局
+                    episode_stats = self._run_episode()
+                    self.episode_count += 1
+                    pbar.update(1)
 
                 # 训练（传递当前训练阶段）
                 train_stats = self.agent_pool.train_all(
@@ -326,6 +364,220 @@ class NFSPTrainer:
             self._populate_centralized_buffer_from_steps(step_data)
 
         return episode_stats
+
+    # ==================== 向量化训练辅助方法 ====================
+
+    def _init_env_state(self, env_idx: int, obs: Dict) -> Dict:
+        """
+        初始化单个环境的状态字典
+
+        Args:
+            env_idx: 环境索引
+            obs: 初始观测
+
+        Returns:
+            环境状态字典
+        """
+        return {
+            'env_idx': env_idx,
+            'current_agent': 0,  # 总是从 agent_0 开始
+            'current_obs': obs,
+            'action_mask': obs['action_mask'],
+            'step_data': [],
+            'rewards': [0.0] * 4,
+            'step_count': 0,
+            'done': False,
+        }
+
+    def _group_by_current_agent(self, env_states: List[Dict], active_envs: List[int]) -> Dict[int, List[int]]:
+        """
+        按当前智能体 ID 分组活跃环境
+
+        Args:
+            env_states: 所有环境的状态列表
+            active_envs: 活跃环境的索引列表
+
+        Returns:
+            {agent_id: [env_indices]} - 例如 {0: [0, 3], 1: [1], 2: [2]}
+        """
+        groups = {0: [], 1: [], 2: [], 3: []}
+        for idx in active_envs:
+            agent_id = env_states[idx]['current_agent']
+            groups[agent_id].append(idx)
+        return groups
+
+    def _execute_single_step(
+        self,
+        env_states: List[Dict],
+        env_idx: int,
+        action_type: int,
+        action_param: int,
+        log_prob: float = 0.0,
+        value: float = 0.0,
+    ):
+        """
+        执行单个环境的步骤并更新状态
+
+        Args:
+            env_states: 所有环境的状态列表
+            env_idx: 要执行的环境索引
+            action_type: 动作类型
+            action_param: 动作参数
+            log_prob: 动作对数概率
+            value: 价值估计
+        """
+        import copy
+        state = env_states[env_idx]
+
+        # 记录当前步骤数据
+        obs_copy = {k: copy.deepcopy(v) if isinstance(v, dict) else v
+                    for k, v in state['current_obs'].items()}
+        action_mask_copy = state['action_mask'].copy()
+
+        state['step_data'].append({
+            'agent_idx': state['current_agent'],
+            'obs': obs_copy,
+            'action_mask': action_mask_copy,
+            'action_type': action_type,
+            'action_param': action_param,
+            'log_prob': log_prob,
+            'value': value,
+            'reward': 0.0,  # 稍后更新
+            'done': False,   # 稍后更新
+        })
+
+        # 执行动作
+        env = self.env.step((action_type, action_param))
+
+        # 更新奖励
+        state['rewards'][state['current_agent']] += reward
+        if state['step_data']:
+            state['step_data'][-1]['reward'] = reward
+
+        # 更新状态
+        state['step_count'] += 1
+        state['done'] = terminated or truncated
+
+        if not state['done']:
+            # 更新到下一个智能体
+            state['current_agent'] = (state['current_agent'] + 1) % 4
+            state['current_obs'] = obs
+            state['action_mask'] = obs['action_mask']
+
+    def _step_agent_batch(
+        self,
+        env_states: List[Dict],
+        env_indices: List[int],
+        agent_id: int,
+    ):
+        """
+        对一组环境批量选择动作并执行
+
+        Args:
+            env_states: 所有环境的状态
+            env_indices: 需要处理的环境索引列表（都是 agent_id 的回合）
+            agent_id: 当前智能体 ID
+        """
+        if not env_indices:
+            return
+
+        # 1. 收集观测和掩码
+        obs_batch = [env_states[idx]['current_obs'] for idx in env_indices]
+        mask_batch = [env_states[idx]['action_mask'] for idx in env_indices]
+
+        # 2. 确定对手类型（探索期 vs 自对弈期）
+        use_random_opponents = self.episode_count < self.exploration_episodes
+
+        # 3. 批量选择动作
+        if use_random_opponents:
+            # 探索期：使用随机对手（逐个处理，无批量优化）
+            for idx in env_indices:
+                action_type, action_param = self.random_opponent.choose_action(
+                    env_states[idx]['current_obs'],
+                    env_states[idx]['action_mask']
+                )
+                self._execute_single_step(env_states, idx, action_type, action_param)
+        else:
+            # 自对弈期：使用 NFSP 批量推理
+            actions_type, actions_param, log_probs, values = self.agent_pool.select_actions_batch(
+                obs_batch, mask_batch
+            )
+
+            # 4. 执行步骤
+            for i, idx in enumerate(env_indices):
+                self._execute_single_step(
+                    env_states, idx,
+                    actions_type[i], actions_param[i],
+                    log_probs[i], values[i]
+                )
+
+    def _finalize_episode(self, env_state: Dict) -> Dict:
+        """
+        完成一个环境的回合，收集数据
+
+        Args:
+            env_state: 环境状态字典
+        """
+        episode_stats = {
+            'rewards': env_state['rewards'],
+            'steps': env_state['step_count'],
+            'winner': None,  # 可以从最后一个 step 的 info 获取
+            'use_random_opponents': self.episode_count < self.exploration_episodes,
+            'curriculum_phase': self.current_phase,
+            'curriculum_progress': self.current_progress,
+        }
+
+        # 填充 centralized buffer（Phase 1-2）
+        if self.current_phase in [1, 2] and len(env_state['step_data']) > 0:
+            self._populate_centralized_buffer_from_steps(
+                env_state['step_data'], env_state['env_idx']
+            )
+
+        return episode_stats
+
+    def _run_episode_vectorized(self) -> List[Dict]:
+        """
+        运行一批向量化回合
+
+        Returns:
+            每个环境的回合统计列表
+        """
+        # 1. 重置所有环境
+        observations = self.vec_env.reset()
+        env_states = [self._init_env_state(i, obs) for i, obs in enumerate(observations)]
+
+        # 2. 确定对手类型
+        use_random_opponents = self.episode_count < self.exploration_episodes
+
+        # 3. 预选自对弈期的对手（每个位置一个）
+        episode_opponents = [None] * 4
+        if not use_random_opponents:
+            for i in range(4):
+                episode_opponents[i] = self.policy_pool_manager.sample_opponent()
+
+        # 4. 运行直到所有环境完成
+        active_envs = list(range(self.num_envs))
+        max_steps = 1000  # 防止无限循环
+        step_count = 0
+
+        while active_envs and step_count < max_steps:
+            # 按智能体分组
+            agent_groups = self._group_by_current_agent(env_states, active_envs)
+
+            # 对每个分组批量执行
+            for agent_id, env_indices in agent_groups.items():
+                if env_indices:
+                    self._step_agent_batch(env_states, env_indices, agent_id)
+
+            # 检查完成的环境
+            for idx in active_envs[:]:
+                if env_states[idx]['done']:
+                    active_envs.remove(idx)
+
+            step_count += 1
+
+        # 5. 返回所有环境的统计
+        return [self._finalize_episode(s) for s in env_states]
 
     def _populate_centralized_buffer_from_steps(self, step_data: List[Dict]):
         """
@@ -632,6 +884,8 @@ def train_nfsp(
     device: str = "cuda",
     quick_test: bool = False,
     checkpoint_path: Optional[str] = None,
+    use_vectorized_env: bool = False,
+    num_envs: int = 4,
 ):
     """
     训练 NFSP 智能体的便捷函数
@@ -641,6 +895,8 @@ def train_nfsp(
         device: 计算设备
         quick_test: 是否使用快速测试配置
         checkpoint_path: 检查点路径（用于恢复训练）
+        use_vectorized_env: 是否使用向量化环境
+        num_envs: 向量化环境数量
     """
     if quick_test:
         config = get_quick_test_config()
@@ -654,7 +910,13 @@ def train_nfsp(
         device = "cpu"
 
     # 创建训练器
-    trainer = NFSPTrainer(config=config, device=device, checkpoint_path=checkpoint_path)
+    trainer = NFSPTrainer(
+        config=config,
+        device=device,
+        checkpoint_path=checkpoint_path,
+        use_vectorized_env=use_vectorized_env,
+        num_envs=num_envs,
+    )
 
     # 开始训练
     trainer.train()
