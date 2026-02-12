@@ -278,6 +278,54 @@ class NFSPAgentPool:
         """获取指定 ID 的智能体"""
         return self.agents[agent_id]
 
+    def select_actions_batch(
+        self,
+        obs_batch: List[Dict[str, np.ndarray]],
+        action_mask_batch: List[np.ndarray],
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """
+        批量动作选择（用于向量化训练）
+
+        Args:
+            obs_batch: 观测字典列表
+            action_mask_batch: 动作掩码列表
+
+        Returns:
+            actions_type: [batch_size] numpy 数组
+            actions_param: [batch_size] numpy 数组
+            log_probs: [batch_size] numpy 数组
+            values: [batch_size] numpy 数组
+        """
+        if self.share_parameters:
+            # 共享参数模式：使用共享 NFSP 进行批量选择
+            return self.shared_nfsp.select_actions_batch(obs_batch, action_mask_batch)
+        else:
+            # 非共享参数模式：降级逐个处理（不推荐，但提供兼容性）
+            import warnings
+            warnings.warn(
+                "使用非共享参数模式的批量动作选择，性能将下降。"
+                "建议使用 share_parameters=True 以获得最佳性能。"
+            )
+
+            batch_size = len(obs_batch)
+            actions_type = np.zeros(batch_size, dtype=np.int64)
+            actions_param = np.zeros(batch_size, dtype=np.int64)
+            log_probs = np.zeros(batch_size, dtype=np.float32)
+            values = np.zeros(batch_size, dtype=np.float32)
+
+            for i in range(batch_size):
+                obs = obs_batch[i]
+                mask = action_mask_batch[i]
+                agent = self.agents[i]
+                action_type, action_param = agent.choose_action(obs, mask)
+
+                actions_type[i] = action_type
+                actions_param[i] = action_param
+                log_probs[i] = 0.0  # choose_action 不返回 log_prob
+                values[i] = 0.0    # choose_action 不返回 value
+
+            return actions_type, actions_param, log_probs, values
+
     def train_all(self, training_phase: int = 1) -> Dict:
         """
         训练所有智能体（参数共享时只训练一次）

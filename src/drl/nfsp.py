@@ -12,7 +12,7 @@ NFSP (Neural Fictitious Self-Play) 协调器
 
 import torch
 import numpy as np
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, List
 import random
 
 from src.drl.network import ActorCriticNetwork, AveragePolicyNetwork, create_networks
@@ -160,6 +160,82 @@ class NFSP:
 
             # 平均策略网络不返回 log_prob 和 value
             return action_type, action_param, 0.0, 0.0
+
+    def select_actions_batch(
+        self,
+        obs_batch: List[Dict[str, np.ndarray]],
+        action_mask_batch: List[np.ndarray],
+        use_best_response: Optional[bool] = None,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """
+        批量动作选择（用于向量化训练）
+
+        Args:
+            obs_batch: 观测字典列表
+            action_mask_batch: 动作掩码列表
+            use_best_response: 强制使用最佳响应网络（None 则根据 η 随机选择）
+
+        Returns:
+            actions_type: [batch_size] numpy 数组
+            actions_param: [batch_size] numpy 数组
+            log_probs: [batch_size] numpy 数组
+            values: [batch_size] numpy 数组
+        """
+        import copy
+        batch_size = len(obs_batch)
+
+        actions_type = np.zeros(batch_size, dtype=np.int64)
+        actions_param = np.zeros(batch_size, dtype=np.int64)
+        log_probs = np.zeros(batch_size, dtype=np.float32)
+        values = np.zeros(batch_size, dtype=np.float32)
+
+        # 决定每个环境使用哪个网络
+        if use_best_response is None:
+            use_best_response_list = [random.random() < self.eta for _ in range(batch_size)]
+        else:
+            use_best_response_list = [use_best_response] * batch_size
+
+        # 对每个环境进行动作选择（逐个处理以保证正确性）
+        for i in range(batch_size):
+            obs = obs_batch[i]
+            action_mask = action_mask_batch[i]
+            use_br = use_best_response_list[i]
+
+            # 深度复制观测（避免引用问题）
+            obs_copy = copy.deepcopy(obs)
+
+            # 准备观测张量
+            obs_tensor = self._prepare_obs(obs_copy)
+            action_mask_tensor = torch.FloatTensor(action_mask).unsqueeze(0).to(self.device)
+
+            with torch.no_grad():
+                if use_br:
+                    # 使用最佳响应网络
+                    action_type, action_param, log_prob, _, value = (
+                        self.best_response_net.get_action_and_value(
+                            obs_tensor, action_mask_tensor
+                        )
+                    )
+                    actions_type[i] = action_type.item()
+                    actions_param[i] = action_param.item()
+                    log_probs[i] = log_prob.item()
+                    values[i] = value.item()
+                else:
+                    # 使用平均策略网络
+                    type_probs, param_probs = self.average_policy_net.get_action_probs(
+                        obs_tensor, action_mask_tensor
+                    )
+
+                    type_dist = torch.distributions.Categorical(type_probs)
+                    param_dist = torch.distributions.Categorical(param_probs)
+
+                    actions_type[i] = type_dist.sample().item()
+                    actions_param[i] = param_dist.sample().item()
+                    # 平均策略网络不返回 log_prob 和 value
+                    log_probs[i] = 0.0
+                    values[i] = 0.0
+
+        return actions_type, actions_param, log_probs, values
 
     def store_transition(
         self,
