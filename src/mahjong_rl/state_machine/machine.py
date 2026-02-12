@@ -138,7 +138,8 @@ class MahjongStateMachine:
         rule_engine: IRuleEngine,
         observation_builder: IObservationBuilder,
         logger: Optional[ILogger] = None,
-        enable_logging: bool = True
+        enable_logging: bool = True,
+        fast_mode: bool = False
     ):
         """
         初始化状态机
@@ -148,6 +149,7 @@ class MahjongStateMachine:
             observation_builder: 观测构建器实例，用于生成RL观测
             logger: 外部日志器（ILogger 实例）
             enable_logging: 是否启用内部 StateLogger（用于兼容）
+            fast_mode: 快速模式，禁用状态快照以提升性能（用于训练）
         """
         self.rule_engine = rule_engine
         self.observation_builder = observation_builder
@@ -155,6 +157,9 @@ class MahjongStateMachine:
         # 日志系统：优先使用外部 logger，否则使用内部 StateLogger
         self.external_logger = logger
         self.internal_logger = StateLogger() if enable_logging else None
+
+        # 快速模式：禁用快照功能以提升性能
+        self.fast_mode = fast_mode
         
         # 注册所有状态
         self._register_states()
@@ -370,19 +375,23 @@ class MahjongStateMachine:
     def _save_snapshot(self, context: GameContext):
         """
         保存当前状态快照（用于回滚）
-        
+
         保存当前游戏上下文和状态信息的深拷贝，以便后续回滚。
-        
+
         Args:
             context: 游戏上下文
         """
+        # 快速模式：跳过快照以提升性能
+        if self.fast_mode:
+            return
+
         snapshot = {
             'state_type': self.current_state_type,
             'context': deepcopy(context),
             'timestamp': time.time()
         }
         self.state_history.append(snapshot)
-        
+
         # 限制历史记录大小（最多保存100个快照以控制内存）
         if len(self.state_history) > 100:
             self.state_history.pop(0)
@@ -390,18 +399,23 @@ class MahjongStateMachine:
     def rollback(self, steps: int = 1) -> GameContext:
         """
         回滚到之前的状态
-        
+
         通过保存的状态快照，可以回滚到之前的任何状态。
-        
+
         Args:
             steps: 回滚步数（默认为1，回退一个状态）
-        
+
         Returns:
             回滚后的游戏上下文
-        
+
         Raises:
             ValueError: 如果回滚步数超过历史记录长度
+            RuntimeError: 如果在快速模式下调用（快照已禁用）
         """
+        # 快速模式：不允许回滚
+        if self.fast_mode:
+            raise RuntimeError("Cannot rollback in fast_mode - snapshots are disabled")
+
         if steps > len(self.state_history):
             raise ValueError(
                 f"Cannot rollback {steps} steps, history has {len(self.state_history)} steps"

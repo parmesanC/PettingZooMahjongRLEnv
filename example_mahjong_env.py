@@ -37,9 +37,21 @@ from src.mahjong_rl.logging import (
 class WuhanMahjongEnv(AECEnv):
     """
     武汉麻将七皮四赖子环境 - 状态机集成版本
-    
+
     该环境集成了完整的MahjongStateMachine，实现了PettingZoo AECEnv接口。
     状态机自动处理所有游戏逻辑，环境只需负责agent交互和观测传递。
+
+    性能优化：
+        - fast_mode=True 可禁用状态快照，显著提升训练速度
+        - 建议训练时使用 fast_mode=True
+        - 调试时可保留默认 fast_mode=False 以支持状态回滚
+
+    示例：
+        # 训练模式（最快）
+        env = WuhanMahjongEnv(fast_mode=True, enable_logging=False)
+
+        # 调试模式（完整功能）
+        env = WuhanMahjongEnv(fast_mode=False, enable_logging=True)
     """
 
     metadata = {'render_modes': ['human', 'ansi'], 'name': 'wuhan_mahjong_v1.0'}
@@ -73,7 +85,8 @@ class WuhanMahjongEnv(AECEnv):
         enable_logging=True,
         log_config=None,
         logger=None,
-        enable_perf_monitor=False
+        enable_perf_monitor=False,
+        fast_mode=False  # 新增：快速模式，禁用快照以提升性能
     ):
         """
         初始化环境
@@ -86,6 +99,7 @@ class WuhanMahjongEnv(AECEnv):
             log_config: 日志配置字典（覆盖默认配置）
             logger: 自定义日志器（如果提供，则忽略 log_config）
             enable_perf_monitor: 是否启用性能监控
+            fast_mode: 快速模式，禁用状态快照以提升训练性能
         """
         super().__init__()
 
@@ -114,6 +128,7 @@ class WuhanMahjongEnv(AECEnv):
         self.context: GameContext = None
         self.state_machine: MahjongStateMachine = None
         self.enable_logging = enable_logging
+        self.fast_mode = fast_mode  # 保存 fast_mode 设置
 
         # 性能优化：缓存组件（在 reset() 中创建）
         self._cached_validator: Optional[ActionValidator] = None
@@ -285,12 +300,13 @@ class WuhanMahjongEnv(AECEnv):
         rule_engine = Wuhan7P4LRuleEngine(self.context)
         observation_builder = Wuhan7P4LObservationBuilder(self.context)
 
-        # 创建状态机，传递 logger
+        # 创建状态机，传递 logger 和 fast_mode
         self.state_machine = MahjongStateMachine(
             rule_engine=rule_engine,
             observation_builder=observation_builder,
             logger=self.logger,
-            enable_logging=self.enable_logging
+            enable_logging=self.enable_logging,
+            fast_mode=self.fast_mode  # 传递 fast_mode 参数
         )
         self.state_machine.set_context(self.context)
 
