@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Callable
 from collections import deque
 import numpy as np
 
@@ -8,6 +8,7 @@ from src.mahjong_rl.core.constants import ActionType, GameStateType
 from src.mahjong_rl.rules.wuhan_mahjong_rule_engine.action_validator import (
     ActionValidator,
 )
+from src.mahjong_rl.optimization.mask_cache import MaskCacheKey, ActionMaskCache
 
 
 # action_mask 索引范围定义（总长度：145位）
@@ -49,6 +50,33 @@ class Wuhan7P4LObservationBuilder(IObservationBuilder):
 
     def __init__(self, context: Optional[GameContext] = None):
         self.context = context
+        # 缓存组件（由环境注入）
+        self._cached_validator: Optional[ActionValidator] = None
+        self._mask_cache = ActionMaskCache()
+
+    def set_cached_validator(self, validator: ActionValidator) -> None:
+        """
+        设置缓存的 ActionValidator（由环境调用）
+
+        Args:
+            validator: 缓存的 ActionValidator 实例
+        """
+        self._cached_validator = validator
+
+    def _get_validator(self, context: GameContext) -> ActionValidator:
+        """
+        获取 ActionValidator（优先使用缓存实例）
+
+        Args:
+            context: 游戏上下文
+
+        Returns:
+            ActionValidator 实例
+        """
+        if self._cached_validator is not None:
+            return self._cached_validator
+        # 降级：创建新实例
+        return ActionValidator(context)
 
     def build(self, player_id: int, context: GameContext) -> Dict[str, Any]:
         """构建玩家观察"""
@@ -88,7 +116,23 @@ class Wuhan7P4LObservationBuilder(IObservationBuilder):
 
     def build_action_mask(self, player_id: int, context: GameContext) -> np.ndarray:
         """
-        构建动作掩码 - 返回扁平化的145位二进制数组
+        构建动作掩码 - 返回扁平化的145位二进制数组（带缓存）
+
+        Returns:
+            np.ndarray: 形状为 (145,) 的二进制数组
+        """
+        # 构建缓存键
+        cache_key = MaskCacheKey.from_context(player_id, context)
+
+        # 使用缓存或构建新 mask
+        def build_mask():
+            return self._build_action_mask_uncached(player_id, context)
+
+        return self._mask_cache.get_or_build(cache_key, build_mask)
+
+    def _build_action_mask_uncached(self, player_id: int, context: GameContext) -> np.ndarray:
+        """
+        构建动作掩码 - 无缓存版本（内部方法）
 
         Returns:
             np.ndarray: 形状为 (145,) 的二进制数组
@@ -135,10 +179,9 @@ class Wuhan7P4LObservationBuilder(IObservationBuilder):
 
         修改：不再依赖 last_drawn_tile，直接基于手牌检测
         """
-        # 不再依赖 last_drawn_tile，传入 None 让 ActionValidator 基于手牌检测
-        actions = ActionValidator(context).detect_available_actions_after_draw(
-            player, None
-        )
+        # 使用缓存的验证器
+        validator = self._get_validator(context)
+        actions = validator.detect_available_actions_after_draw(player, None)
 
         for action in actions:
             action_type = action.action_type.value
@@ -205,8 +248,9 @@ class Wuhan7P4LObservationBuilder(IObservationBuilder):
         可以：暗杠、补杠、红中杠、赖子杠、皮子杠、出牌
         不能：胡牌、过
         """
-        # 使用 detect_available_actions_after_meld（与 meld_decision_state 一致）
-        actions = ActionValidator(context).detect_available_actions_after_meld(player)
+        # 使用缓存的验证器
+        validator = self._get_validator(context)
+        actions = validator.detect_available_actions_after_meld(player)
 
         for action in actions:
             action_type = action.action_type.value
@@ -260,7 +304,9 @@ class Wuhan7P4LObservationBuilder(IObservationBuilder):
         discard_player = context.discard_player
 
         if discard_tile is not None and discard_player is not None:
-            actions = ActionValidator(context).detect_available_actions_after_discard(
+            # 使用缓存的验证器
+            validator = self._get_validator(context)
+            actions = validator.detect_available_actions_after_discard(
                 player, discard_tile, discard_player
             )
 

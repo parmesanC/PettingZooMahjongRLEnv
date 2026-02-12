@@ -17,6 +17,11 @@ from src.mahjong_rl.rules.wuhan_7p4l_rule_engine import Wuhan7P4LRuleEngine
 from src.mahjong_rl.observation.wuhan_7p4l_observation_builder import Wuhan7P4LObservationBuilder
 from src.mahjong_rl.rules.round_info import RoundInfo
 
+# 性能优化：缓存组件
+from src.mahjong_rl.rules.wuhan_mahjong_rule_engine.action_validator import ActionValidator
+from src.mahjong_rl.rules.wuhan_mahjong_rule_engine.win_detector import WuhanMahjongWinChecker
+from src.mahjong_rl.optimization.mask_cache import ActionMaskCache
+
 # 日志系统导入
 from src.mahjong_rl.logging.base import ILogger
 from src.mahjong_rl.logging import (
@@ -109,6 +114,11 @@ class WuhanMahjongEnv(AECEnv):
         self.context: GameContext = None
         self.state_machine: MahjongStateMachine = None
         self.enable_logging = enable_logging
+
+        # 性能优化：缓存组件（在 reset() 中创建）
+        self._cached_validator: Optional[ActionValidator] = None
+        self._cached_win_checker: Optional[WuhanMahjongWinChecker] = None
+        self._cached_mask_cache: Optional[ActionMaskCache] = None
 
         # 初始化轮次信息（Env 内部管理）
         self.round_info = RoundInfo()
@@ -283,6 +293,18 @@ class WuhanMahjongEnv(AECEnv):
             enable_logging=self.enable_logging
         )
         self.state_machine.set_context(self.context)
+
+        # 性能优化：创建缓存的组件（每个 episode 一次）
+        self._cached_validator = ActionValidator(self.context)
+        self._cached_win_checker = WuhanMahjongWinChecker(self.context)
+        self._cached_mask_cache = ActionMaskCache()
+
+        # 注入缓存的组件到状态机和观测构建器
+        self.state_machine.set_cached_components(
+            validator=self._cached_validator,
+            win_checker=self._cached_win_checker
+        )
+        observation_builder.set_cached_validator(self._cached_validator)
 
         # 记录游戏开始
         if self.logger:

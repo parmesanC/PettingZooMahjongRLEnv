@@ -41,6 +41,20 @@ class DrawingAfterGongState(GameState):
         """
         super().__init__(rule_engine, observation_builder)
 
+        # 性能优化：缓存的 WinChecker
+        self._cached_win_checker = None
+
+    def set_cached_components(self, validator=None, win_checker=None) -> None:
+        """
+        设置缓存的组件（由状态机调用）
+
+        Args:
+            validator: 缓存的 ActionValidator 实例（此状态不使用）
+            win_checker: 缓存的 WuhanMahjongWinChecker 实例
+        """
+        if win_checker is not None:
+            self._cached_win_checker = win_checker
+
     def enter(self, context: GameContext) -> None:
         """
         进入杠后补牌状态
@@ -118,5 +132,9 @@ class DrawingAfterGongState(GameState):
         Returns:
             胡牌检测结果
         """
-        win_checker = WuhanMahjongWinChecker(context)
+        # 使用缓存的 WinChecker 或降级创建新实例
+        if self._cached_win_checker is not None:
+            win_checker = self._cached_win_checker
+        else:
+            win_checker = WuhanMahjongWinChecker(context)
         return win_checker.check_win(player)

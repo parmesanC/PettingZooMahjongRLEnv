@@ -204,11 +204,34 @@ class MahjongStateMachine:
     def set_context(self, context: GameContext):
         """
         设置游戏上下文引用
-        
+
         Args:
             context: 游戏上下文
         """
         self.context = context
+
+    def set_cached_components(self, validator=None, win_checker=None) -> None:
+        """
+        设置缓存的组件（由环境调用）
+
+        将缓存的 ActionValidator 和 WuhanMahjongWinChecker 传递给所有状态。
+
+        Args:
+            validator: 缓存的 ActionValidator 实例
+            win_checker: 缓存的 WuhanMahjongWinChecker 实例
+        """
+        # 存储到状态机（用于后续新状态）
+        self._cached_validator = validator
+        self._cached_win_checker = win_checker
+
+        # 传递给当前状态（如果支持）
+        if self.current_state and hasattr(self.current_state, 'set_cached_components'):
+            self.current_state.set_cached_components(validator, win_checker)
+
+        # 传递给所有已注册的状态
+        for state in self.states.values():
+            if hasattr(state, 'set_cached_components'):
+                state.set_cached_components(validator, win_checker)
     
     def transition_to(self, new_state_type: GameStateType, context: GameContext):
         """
