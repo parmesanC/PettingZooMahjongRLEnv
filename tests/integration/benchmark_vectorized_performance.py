@@ -159,7 +159,7 @@ def main():
 
     # 测试参数（减少回合数以快速测试）
     episodes = 20
-    env_counts = [2, 4]  # 只测试 2 和 4 个环境
+    env_counts = [2, 4, 8, 16]  # 测试 2、4 和 8 个环境
 
     # 运行单环境基准测试
     single_stats = run_single_env_benchmark(episodes)
