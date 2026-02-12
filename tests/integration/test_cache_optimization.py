@@ -1,13 +1,13 @@
 """
-缓存优化集成测试
+Cache optimization integration tests
 
-验证性能优化后的行为正确性和缓存功能。
+Verifies behavioral correctness and cache functionality after performance optimization.
 """
 
 import sys
 import os
 
-# 设置项目路径
+# Set project path
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, project_root)
 
