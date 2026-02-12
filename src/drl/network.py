@@ -606,12 +606,11 @@ class ActorCriticNetwork(nn.Module):
         type_mask[:, 10] = action_mask[:, 144]  # PASS
 
         # 填充参数掩码（取所有涉及牌ID的位的并集）
-        param_mask = (
-            action_mask[:, 0:34]  # DISCARD
-            | action_mask[:, 39:73]  # KONG_SUPPLEMENT
-            | action_mask[:, 73:107]  # KONG_CONCEALED
-            | action_mask[:, 108:142]  # KONG_SKIN
-        )
+        # 使用 torch.maximum 替代按位或运算（支持 Float 类型）
+        param_mask = action_mask[:, 0:34].clone()  # DISCARD
+        param_mask = torch.maximum(param_mask, action_mask[:, 39:73])  # KONG_SUPPLEMENT
+        param_mask = torch.maximum(param_mask, action_mask[:, 73:107])  # KONG_CONCEALED
+        param_mask = torch.maximum(param_mask, action_mask[:, 108:142])  # KONG_LAZY
 
         return type_mask, param_mask
 
@@ -710,12 +709,11 @@ class AveragePolicyNetwork(nn.Module):
         type_mask[:, 9] = action_mask[:, 143]
         type_mask[:, 10] = action_mask[:, 144]
 
-        param_mask = (
-            action_mask[:, 0:34]
-            | action_mask[:, 39:73]
-            | action_mask[:, 73:107]
-            | action_mask[:, 108:142]
-        )
+        # 使用 torch.maximum 替代按位或运算（支持 Float 类型）
+        param_mask = action_mask[:, 0:34].clone()
+        param_mask = torch.maximum(param_mask, action_mask[:, 39:73])
+        param_mask = torch.maximum(param_mask, action_mask[:, 73:107])
+        param_mask = torch.maximum(param_mask, action_mask[:, 108:142])
 
         return type_mask, param_mask
 

@@ -64,9 +64,10 @@ def test_nfsp_select_actions_batch_with_best_response():
         obs_batch, mask_batch, use_best_response=True
     )
 
-    # 验证所有动作都来自最佳响应网络（log_prob 和 value 不为0）
-    assert np.all(log_probs > 0)
-    assert np.all(values > 0)
+    # 验证所有动作都来自最佳响应网络（log_prob < 0 且 value 不为0）
+    # log_prob 总是负值（log 概率 ≤ 0）
+    assert np.all(log_probs < 0)
+    assert np.all(values != 0)
 
 
 def test_nfsp_select_actions_batch_with_average_policy():
