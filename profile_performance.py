@@ -194,6 +194,7 @@ def profile_single_episode():
             render_mode=None,
             training_phase=1,
             enable_logging=False,
+            fast_mode=True,  # 训练性能优化：禁用快照
         )
 
     # 创建agents
@@ -252,22 +253,22 @@ def profile_single_episode():
 
 
 def profile_with_cprofile():
-    """使用 cProfile 分析（20 个 episode）"""
+    """使用 cProfile 分析（50 个 episode）"""
     print("\n### cProfile 分析 ###")
-    print("Running 20 episodes to collect detailed function call statistics...")
+    print("Running 50 episodes to collect detailed function call statistics...")
     print("This may take a few minutes...\n")
 
     profiler = cProfile.Profile()
     profiler.enable()
 
     # 创建环境和agents
-    env = WuhanMahjongEnv(render_mode=None, training_phase=1, enable_logging=False)
+    env = WuhanMahjongEnv(render_mode=None, training_phase=1, enable_logging=False, fast_mode=True)
     config = get_quick_test_config()
     agent_pool = NFSPAgentPool(config=config, device="cpu", num_agents=4, share_parameters=True)
     random_opponent = RandomOpponent()
 
-    # 运行20个episode
-    num_episodes = 20
+    # 运行50个episode
+    num_episodes = 50
     for ep in range(num_episodes):
         if ep % 5 == 0:  # 每 5 个 episode 提示进度
             print(f"Progress: {ep+1}/{num_episodes} episodes...")
@@ -338,6 +339,7 @@ def profile_full_benchmark(num_episodes: int = 20):
                 render_mode=None,
                 training_phase=1,
                 enable_logging=False,
+                fast_mode=True,  # 训练性能优化：禁用快照
             )
             config = get_quick_test_config()
             random_opponent = RandomOpponent()
@@ -537,7 +539,7 @@ def profile_observation_building():
     import time
     from src.mahjong_rl.observation.wuhan_7p4l_observation_builder import Wuhan7P4LObservationBuilder
 
-    env = WuhanMahjongEnv(render_mode=None, training_phase=1, enable_logging=False)
+    env = WuhanMahjongEnv(render_mode=None, training_phase=1, enable_logging=False, fast_mode=True)
     obs, _ = env.reset()
 
     profiler = PerformanceProfiler()
@@ -659,10 +661,10 @@ if __name__ == "__main__":
     # 1. 基础性能分析（5 episodes）
     profile_single_episode()
 
-    # 2. 完整基准测试（20 episodes）
-    profile_full_benchmark(num_episodes=20)
+    # 2. 完整基准测试（50 episodes）
+    profile_full_benchmark(num_episodes=50)
 
-    # 3. cProfile 详细分析（20 episodes）
+    # 3. cProfile 详细分析（50 episodes）
     profile_with_cprofile()
 
     # 4. 观测构建分析

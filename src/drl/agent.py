@@ -497,6 +497,19 @@ class RandomOpponent:
         # 将索引转换为动作类型和参数
         action_type, action_param = self._index_to_action(action_idx)
 
+        # 验证：确保选择的动作确实在 mask 中（防御性检查）
+        # 注意：action_type 不是展平索引，需要重新映射验证
+        if action_type == 10:  # PASS
+            if action_mask[144] != 1:
+                # PASS 不可用，返回第一个有效动作
+                action_idx = valid_indices[0]
+                action_type, action_param = self._index_to_action(action_idx)
+        elif action_type == 0:  # DISCARD
+            if action_mask[action_param] != 1:
+                # 选择的牌不可用，返回第一个有效动作
+                action_idx = valid_indices[0]
+                action_type, action_param = self._index_to_action(action_idx)
+
         return action_type, action_param
 
     def _index_to_action(self, idx: int) -> Tuple[int, int]:
@@ -509,6 +522,11 @@ class RandomOpponent:
         Returns:
             (action_type, action_param)
         """
+        # 边界检查：防御性编程
+        if idx < 0 or idx > 144:
+            print(f"⚠️ RandomOpponent: 无效动作索引 {idx}，回退到 PASS")
+            return 10, -1  # PASS
+
         if idx < 34:
             # DISCARD: 0-33
             return 0, idx
