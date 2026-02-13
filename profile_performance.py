@@ -255,12 +255,43 @@ def profile_network_forward():
     # 创建网络
     actor_net, policy_net = create_networks(config, device)
 
-    # 创建虚拟输入
+    # 创建完整的虚拟输入（匹配 Wuhan7P4LObservationBuilder 的输出）
     batch_size = 4
     obs = {
-        "hand": torch.randn(batch_size, 14, 34).to(device),
-        "discard_pool": torch.randn(batch_size, 34).to(device),
+        # 全局手牌 [batch, 136] (4 players * 34 tiles)
+        "global_hand": torch.randn(batch_size, 136).to(device),
+        # 私有手牌 [batch, 34]
+        "private_hand": torch.randn(batch_size, 34).to(device),
+        # 弃牌池 [batch, 34]
+        "discard_pool_total": torch.randn(batch_size, 34).to(device),
+        # 牌墙 [batch, 82]
         "wall": torch.randn(batch_size, 82).to(device),
+        # 副露 [batch, 16], [batch, 256], [batch, 32]
+        "melds": {
+            "action_types": torch.randint(0, 10, (batch_size, 16)).to(device),
+            "tiles": torch.randint(0, 2, (batch_size, 256)).float().to(device),
+            "group_indices": torch.randint(0, 4, (batch_size, 32)).to(device),
+        },
+        # 动作历史 [batch, 80] each
+        "action_history": {
+            "types": torch.randint(0, 11, (batch_size, 80)).to(device),  # 修复：匹配 ActionType 范围 0-10
+            "params": torch.randint(0, 35, (batch_size, 80)).to(device),
+            "players": torch.randint(0, 4, (batch_size, 80)).to(device),
+        },
+        # 特殊杠 [batch, 12] (4 players * 3 types)
+        "special_gangs": torch.randint(0, 8, (batch_size, 12)).to(device),
+        # 当前玩家 [batch, 1]
+        "current_player": torch.randint(0, 4, (batch_size, 1)).float().to(device),
+        # 番数 [batch, 4]
+        "fan_counts": torch.randint(0, 100, (batch_size, 4)).to(device),
+        # 特殊指示器 [batch, 2]
+        "special_indicators": torch.randint(0, 34, (batch_size, 2)).to(device),
+        # 剩余牌数 [batch, 1]
+        "remaining_tiles": torch.randint(0, 136, (batch_size, 1)).float().to(device),
+        # 庄家 [batch, 1]
+        "dealer": torch.randint(0, 4, (batch_size, 1)).float().to(device),
+        # 当前阶段 [batch, 1]
+        "current_phase": torch.randint(0, 15, (batch_size, 1)).float().to(device),
     }
     action_mask = torch.ones(batch_size, 145).to(device)
 
