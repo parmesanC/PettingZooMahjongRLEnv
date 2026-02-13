@@ -327,97 +327,123 @@ def profile_full_benchmark(num_episodes: int = 20):
 
     start_time = time.perf_counter()
 
-    # 运行 episodes
+    # 运行 episodes（带错误处理）
     for ep in range(num_episodes):
-        if ep % 5 == 0:
-            print(f"Progress: {ep+1}/{num_episodes} episodes...")
+        try:
+            if ep % 5 == 0:
+                print(f"Progress: {ep+1}/{num_episodes} episodes...")
 
-        # 创建环境（每次 episode 隔离）
-        env = WuhanMahjongEnv(
-            render_mode=None,
-            training_phase=1,
-            enable_logging=False,
-        )
-        config = get_quick_test_config()
-        random_opponent = RandomOpponent()
+            # 创建环境（每次 episode 隔离）
+            env = WuhanMahjongEnv(
+                render_mode=None,
+                training_phase=1,
+                enable_logging=False,
+            )
+            config = get_quick_test_config()
+            random_opponent = RandomOpponent()
 
-        # Reset 并跟踪计时
-        reset_start = time.perf_counter()
-        obs, _ = env.reset()
-        reset_time = time.perf_counter() - reset_start
+            # Reset 并跟踪计时
+            reset_start = time.perf_counter()
+            obs, _ = env.reset()
+            reset_time = time.perf_counter() - reset_start
 
-        # 跟踪 episode
-        episode_start = time.perf_counter()
-        episode_steps = 0
-        last_calls = 0
-        step_total = 0.0
-        kong_count = 0
-        pong_count = 0
-        chow_count = 0
+            # 跟踪 episode
+            episode_start = time.perf_counter()
+            episode_steps = 0
+            last_calls = 0
+            step_total = 0.0
+            kong_count = 0
+            pong_count = 0
+            chow_count = 0
 
-        # Episode 循环
-        for agent_name in env.agent_iter():
-            episode_steps += 1
+            # Episode 循环
+            for agent_name in env.agent_iter():
+                episode_steps += 1
 
-            last_start = time.perf_counter()
-            obs, reward, terminated, truncated, info = env.last()
-            last_time = time.perf_counter() - last_start
-            last_calls += 1
-            step_total += last_time
+                last_start = time.perf_counter()
+                obs, reward, terminated, truncated, info = env.last()
+                last_time = time.perf_counter() - last_start
+                last_calls += 1
+                step_total += last_time
 
-            agent_idx = int(agent_name.split("_")[1])
-            action_mask = obs["action_mask"]
+                agent_idx = int(agent_name.split("_")[1])
+                action_mask = obs["action_mask"]
 
-            step_start = time.perf_counter()
-            action_type, action_param = random_opponent.choose_action(obs, action_mask)
-            env.step((action_type, action_param))
-            step_total += time.perf_counter() - step_start
+                step_start = time.perf_counter()
+                action_type, action_param = random_opponent.choose_action(obs, action_mask)
+                env.step((action_type, action_param))
+                step_total += time.perf_counter() - step_start
 
-            # 计数操作
-            if action_type == 3 or action_type > 4:  # KONG actions
-                kong_count += 1
-            elif action_type == 2:  # PONG
-                pong_count += 1
-            elif action_type == 1:  # CHOW
-                chow_count += 1
+                # 计数操作
+                if action_type == 3 or action_type > 4:  # KONG actions
+                    kong_count += 1
+                elif action_type == 2:  # PONG
+                    pong_count += 1
+                elif action_type == 1:  # CHOW
+                    chow_count += 1
 
-            if terminated or truncated:
-                break
+                if terminated or truncated:
+                    break
 
-        episode_duration = time.perf_counter() - episode_start
+            episode_duration = time.perf_counter() - episode_start
 
-        # 获取内存峰值
-        current_mem, peak_mem = tracemalloc.get_traced_memory()
-        peak_mb = peak_mem / 1024 / 1024
+            # 获取内存峰值
+            current_mem, peak_mem = tracemalloc.get_traced_memory()
+            peak_mb = peak_mem / 1024 / 1024
 
-        # 确定胜者（检查 info 或最后玩家）
-        winner = info.get("winner", -1)
+            # 确定胜者（检查 info 或最后玩家）
+            winner = info.get("winner", -1)
 
-        # 存储 episode 数据
-        episode_data = EpisodeData(
-            episode_id=ep + 1,
-            steps=episode_steps,
-            duration_sec=episode_duration,
-            winner=winner,
-            time_reset=reset_time,
-            time_step_total=step_total,
-            time_env_last=last_time * last_calls,
-            count_kongs=kong_count,
-            count_pongs=pong_count,
-            count_chows=chow_count,
-            memory_peak_mb=peak_mb
-        )
+            # 存储 episode 数据
+            episode_data = EpisodeData(
+                episode_id=ep + 1,
+                steps=episode_steps,
+                duration_sec=episode_duration,
+                winner=winner,
+                time_reset=reset_time,
+                time_step_total=step_total,
+                time_env_last=last_time * last_calls,
+                count_kongs=kong_count,
+                count_pongs=pong_count,
+                count_chows=chow_count,
+                memory_peak_mb=peak_mb
+            )
 
-        results.episode_times.append(episode_duration)
-        results.episode_steps.append(episode_steps)
-        results.winners.append(winner)
-        results.env_reset_times.append(reset_time)
-        results.env_step_times.append(step_total)
-        results.env_last_times.append(last_time * last_calls)
-        results.memory_peaks.append(peak_mb)
+            results.episode_times.append(episode_duration)
+            results.episode_steps.append(episode_steps)
+            results.winners.append(winner)
+            results.env_reset_times.append(reset_time)
+            results.env_step_times.append(step_total)
+            results.env_last_times.append(last_time * last_calls)
+            results.memory_peaks.append(peak_mb)
 
-        # 清理环境
-        del env
+            # 清理环境
+            del env
+
+        except Exception as e:
+            # 记录错误但继续
+            print(f"⚠️  Episode {ep+1} failed: {e}")
+
+            # 创建部分结果数据
+            partial_result = EpisodeData(
+                episode_id=ep + 1,
+                steps=0,
+                duration_sec=0.0,
+                winner=-1,  # 无效值表示失败
+                memory_peak_mb=0.0,
+                # 默认值
+                time_reset=0.0, time_step_total=0.0, time_env_last=0.0,
+                count_kongs=0, count_pongs=0, count_chows=0
+            )
+            results.episode_times.append(0.0)
+            results.episode_steps.append(0)
+            results.winners.append(-1)
+            results.env_reset_times.append(0.0)
+            results.env_step_times.append(0.0)
+            results.env_last_times.append(0.0)
+            results.memory_peaks.append(0.0)
+
+            continue
 
     # 总时间
     results.total_duration_sec = time.perf_counter() - start_time
