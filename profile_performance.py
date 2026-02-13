@@ -268,7 +268,7 @@ def profile_network_forward():
         "wall": torch.randn(batch_size, 82).to(device),
         # 副露 [batch, 16], [batch, 256], [batch, 32]
         "melds": {
-            "action_types": torch.randint(0, 10, (batch_size, 16)).to(device),
+            "action_types": torch.randint(0, 11, (batch_size, 16)).to(device),  # 修复：包含 PASS action (value 10)
             "tiles": torch.randint(0, 2, (batch_size, 256)).float().to(device),
             "group_indices": torch.randint(0, 4, (batch_size, 32)).to(device),
         },
