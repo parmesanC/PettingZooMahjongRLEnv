@@ -304,7 +304,7 @@ def profile_network_forward():
         # 庄家 [batch, 1]
         "dealer": torch.randint(0, 4, (batch_size, 1)).float().to(device),
         # 当前阶段 [batch, 1]
-        "current_phase": torch.randint(0, 15, (batch_size, 1)).float().to(device),
+        "current_phase": torch.randint(0, 14, (batch_size, 1)).float().to(device),  # 修复：匹配 14 个游戏状态 (0-13)
     }
     action_mask = torch.ones(batch_size, 145).to(device)
 
