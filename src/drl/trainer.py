@@ -85,6 +85,7 @@ class NFSPTrainer:
                 render_mode=None,
                 training_phase=self.config.mahjong.training_phase,
                 enable_logging=False,
+                fast_mode=True,  # 显式启用 fast_mode（禁用快照，提升性能）
             )
             self.vec_env = make_vec_env(
                 env_factory, num_envs=num_envs, use_subprocess=False
@@ -96,6 +97,7 @@ class NFSPTrainer:
                 render_mode=None,
                 training_phase=self.config.mahjong.training_phase,
                 enable_logging=False,
+                fast_mode=True,  # 显式启用 fast_mode（禁用快照，提升性能）
             )
             self.vec_env = None
 
