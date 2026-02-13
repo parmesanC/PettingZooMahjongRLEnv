@@ -427,6 +427,72 @@ def profile_full_benchmark(num_episodes: int = 20):
     save_results(results, filepath)
 
 
+def print_benchmark_report(stats: Dict[str, Any], results: BenchmarkResults) -> None:
+    """打印格式化的基准测试报告"""
+    print("\n" + "=" * 80)
+    print("Complete Benchmark Report")
+    print("=" * 80)
+
+    # 基本信息
+    print(f"\nEpisodes: {results.num_episodes}")
+    print(f"Total time: {results.total_duration_sec:.2f}s")
+    print(f"Average per episode: {stats['avg_episode_duration']:.3f}s ± {stats['std_episode_duration']:.3f}s")
+
+    # 性能指标
+    print("\n### Throughput Metrics ###")
+    print(f"Average speed: {stats['avg_steps_per_sec']:.1f} steps/sec")
+    print(f"Average FPS: {stats['avg_fps']:.2f} episodes/sec")
+
+    # 环境操作占比
+    reset_pct = (sum(results.env_reset_times) / results.total_duration_sec) * 100
+    last_pct = (sum(results.env_last_times) / results.total_duration_sec) * 100
+    step_pct = (sum(results.env_step_times) / results.total_duration_sec) * 100
+
+    print("\n### Environment Operation Time Percentage ###")
+    print(f"env.reset:  {reset_pct:.1f}%")
+    print(f"env.last:   {last_pct:.1f}%")
+    print(f"env.step:   {step_pct:.1f}%")
+
+    # 内存使用
+    print("\n### Memory Usage ###")
+    print(f"Average memory: {stats['avg_memory_mb']:.1f} MB")
+    print(f"Peak memory: {stats['peak_memory_mb']:.1f} MB")
+
+    # Episode 分布
+    print("\n### Episode Duration Distribution ###")
+    print(f"Fastest: {stats['min_episode_duration']:.3f}s")
+    print(f"Slowest: {stats['max_episode_duration']:.3f}s")
+    print(f"Std dev:  {stats['std_episode_duration']:.3f}s")
+
+    print("\n" + "=" * 80)
+
+
+def save_results(results: BenchmarkResults, filepath: str) -> None:
+    """保存结果到 JSON 文件，原子写入和验证"""
+    try:
+        # 写入临时文件
+        temp_path = filepath + ".tmp"
+        with open(temp_path, 'w', encoding='utf-8') as f:
+            # 转换为带时间戳的字典
+            data = asdict(results)
+            data['timestamp'] = datetime.now().isoformat()
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
+        # 验证可以读回
+        with open(temp_path, 'r', encoding='utf-8') as f:
+            _ = json.load(f)
+
+        # 原子替换
+        Path(filepath).unlink(missing_ok=True)
+        Path(temp_path).rename(filepath)
+
+        print(f"✅ Results saved: {filepath}")
+
+    except Exception as e:
+        print(f"❌ Save results failed: {e}")
+        print("Results output to console only")
+
+
 def profile_observation_building():
     """分析观测构建性能"""
     print("\n### 观测构建性能分析 ###")
