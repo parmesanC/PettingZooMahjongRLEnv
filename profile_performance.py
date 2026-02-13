@@ -252,8 +252,10 @@ def profile_single_episode():
 
 
 def profile_with_cprofile():
-    """使用 cProfile 分析"""
+    """使用 cProfile 分析（20 个 episode）"""
     print("\n### cProfile 分析 ###")
+    print("Running 20 episodes to collect detailed function call statistics...")
+    print("This may take a few minutes...\n")
 
     profiler = cProfile.Profile()
     profiler.enable()
@@ -264,8 +266,12 @@ def profile_with_cprofile():
     agent_pool = NFSPAgentPool(config=config, device="cpu", num_agents=4, share_parameters=True)
     random_opponent = RandomOpponent()
 
-    # 运行3个episode
-    for _ in range(3):
+    # 运行20个episode
+    num_episodes = 20
+    for ep in range(num_episodes):
+        if ep % 5 == 0:  # 每 5 个 episode 提示进度
+            print(f"Progress: {ep+1}/{num_episodes} episodes...")
+
         obs, _ = env.reset()
         for agent_name in env.agent_iter():
             obs, reward, terminated, truncated, info = env.last()
@@ -278,12 +284,17 @@ def profile_with_cprofile():
 
     profiler.disable()
 
-    # 打印结果
+    # 打印结果（增加可读性）
+    print(f"\ncProfile analysis complete ({num_episodes} episodes)")
+    print("=" * 80)
+
     s = io.StringIO()
     ps = pstats.Stats(profiler, stream=s).sort_stats('cumulative')
     ps.print_stats(30)  # 打印前30个函数
 
     print(s.getvalue())
+    print("=" * 80)
+    print(f"提示：完整数据已保存，可以调整打印数量或导出为文件")
 
 
 def profile_full_benchmark(num_episodes: int = 20):
