@@ -630,16 +630,19 @@ if __name__ == "__main__":
     print("训练性能分析工具")
     print("=" * 80)
 
-    # 1. 基础性能分析
+    # 1. 基础性能分析（5 episodes）
     profile_single_episode()
 
-    # 2. cProfile 详细分析
+    # 2. 完整基准测试（20 episodes）
+    profile_full_benchmark(num_episodes=20)
+
+    # 3. cProfile 详细分析（20 episodes）
     profile_with_cprofile()
 
-    # 3. 观测构建分析
+    # 4. 观测构建分析
     profile_observation_building()
 
-    # 4. 网络前向传播分析
+    # 5. 网络前向传播分析
     profile_network_forward()
 
     print("\n" + "=" * 80)
