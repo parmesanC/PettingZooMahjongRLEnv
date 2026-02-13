@@ -256,6 +256,10 @@ def profile_network_forward():
     actor_net, policy_net = create_networks(config, device)
 
     # 创建完整的虚拟输入（匹配 Wuhan7P4LObservationBuilder 的输出）
+    # 注意：所有随机生成的范围必须匹配网络 embedding 层的约束
+    # - action_type_embed: nn.Embedding(11, 32) → 索引 0-10
+    # - action_param_embed: nn.Embedding(35, 32) → 索引 0-34
+    # - player_embed: nn.Embedding(4, 16) → 索引 0-3
     batch_size = 4
     obs = {
         # 全局手牌 [batch, 136] (4 players * 34 tiles)
