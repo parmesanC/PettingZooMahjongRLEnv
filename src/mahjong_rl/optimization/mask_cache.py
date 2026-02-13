@@ -24,6 +24,11 @@ class MaskCacheKey:
     discard_hash: int  # 弃牌堆哈希
     melds_hash: int  # 副露哈希
 
+    # ===== 新增：特殊牌信息 =====
+    # Bug fix: 添加 lazy_tile 和 skin_tile，确保不同局的赖子皮子产生不同的缓存键
+    lazy_tile: int  # 赖子牌 ID
+    skin_tile: tuple  # 皮子牌元组（固定2张）
+
     @classmethod
     def from_context(cls, player_id: int, context: GameContext) -> 'MaskCacheKey':
         """
@@ -50,18 +55,26 @@ class MaskCacheKey:
             for m in player.melds
         ))
 
+        # ===== 新增：特殊牌哈希 =====
+        lazy_tile = context.lazy_tile if context.lazy_tile is not None else -1
+        skin_tile = tuple(context.skin_tile)  # 转为 tuple 以便哈希
+
         return cls(
             player_id=player_id,
             state=context.current_state.value,
             hand_hash=hand_hash,
             discard_hash=discard_hash,
-            melds_hash=melds_hash
+            melds_hash=melds_hash,
+            # 新增字段
+            lazy_tile=lazy_tile,
+            skin_tile=skin_tile
         )
 
     def __hash__(self) -> int:
         """使 MaskCacheKey 可用作字典键"""
         return hash((self.player_id, self.state, self.hand_hash,
-                     self.discard_hash, self.melds_hash))
+                     self.discard_hash, self.melds_hash,
+                     self.lazy_tile, self.skin_tile))
 
 
 class ActionMaskCache:

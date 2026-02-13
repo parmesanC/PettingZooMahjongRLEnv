@@ -89,6 +89,11 @@ class InitialState(GameState):
             context.red_dragon
         )
 
+
+        # Bug fix: 更新 rule_engine 中 validator 的特殊牌信息
+        # 确保缓存的 ActionValidator 能够正确检测动作
+        if hasattr(self.rule_engine, '_validator') and self.rule_engine._validator is not None:
+            self.rule_engine._validator.update_context()
         for i in range(4):
             context.players[i].special_gangs = [0, 0, 0]
 

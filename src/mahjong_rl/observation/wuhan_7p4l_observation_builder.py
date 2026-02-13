@@ -9,6 +9,7 @@ from src.mahjong_rl.rules.wuhan_mahjong_rule_engine.action_validator import (
     ActionValidator,
 )
 from src.mahjong_rl.optimization.mask_cache import MaskCacheKey, ActionMaskCache
+from src.mahjong_rl.core.constants import Tiles
 
 
 # action_mask 索引范围定义（总长度：145位）
@@ -74,6 +75,8 @@ class Wuhan7P4LObservationBuilder(IObservationBuilder):
             ActionValidator 实例
         """
         if self._cached_validator is not None:
+            # Bug fix: 更新缓存的 validator 确保特殊牌信息是最新的
+            self._cached_validator.update_context()
             return self._cached_validator
         # 降级：创建新实例
         return ActionValidator(context)

@@ -14,11 +14,18 @@ from contextlib import contextmanager
 
 # 设置环境
 import os
-os.environ['PYTHONPATH'] = os.path.dirname(os.path.abspath(__file__))
+
+os.environ["PYTHONPATH"] = os.path.dirname(os.path.abspath(__file__))
 
 from example_mahjong_env import WuhanMahjongEnv
 from src.drl.config import get_quick_test_config
 from src.drl.agent import NFSPAgentPool, RandomOpponent
+from src.mahjong_rl.agents.ai.random_strategy import RandomStrategy
+from src.mahjong_rl.core.constants import ActionType
+
+# 调试相关导入
+import json
+from datetime import datetime
 
 # 新增：数据类和JSON导出支持
 from dataclasses import dataclass, field, asdict
@@ -31,6 +38,7 @@ from pathlib import Path
 @dataclass
 class EpisodeData:
     """单个 episode 的性能数据"""
+
     episode_id: int
     steps: int
     duration_sec: float
@@ -53,6 +61,7 @@ class EpisodeData:
 @dataclass
 class BenchmarkResults:
     """完整基准测试结果"""
+
     num_episodes: int
     total_duration_sec: float
 
@@ -77,12 +86,12 @@ class BenchmarkResults:
             "std_episode_duration": float(np.std(self.episode_times)),
             "min_episode_duration": float(np.min(self.episode_times)),
             "max_episode_duration": float(np.max(self.episode_times)),
-
             # 吞吐量
             "total_steps": int(np.sum(self.episode_steps)),
-            "avg_steps_per_sec": float(np.sum(self.episode_steps) / self.total_duration_sec),
+            "avg_steps_per_sec": float(
+                np.sum(self.episode_steps) / self.total_duration_sec
+            ),
             "avg_fps": float(self.num_episodes / self.total_duration_sec),
-
             # 内存 - 使用 memory_peaks（复数）
             "avg_memory_mb": float(np.mean(self.memory_peaks)),
             "peak_memory_mb": float(np.max(self.memory_peaks)),
@@ -90,11 +99,13 @@ class BenchmarkResults:
 
         # 环境操作占比
         total_env_time = (
-            np.sum(self.env_reset_times) +
-            np.sum(self.env_step_times) +
-            np.sum(self.env_last_times)
+            np.sum(self.env_reset_times)
+            + np.sum(self.env_step_times)
+            + np.sum(self.env_last_times)
         )
-        stats["env_time_percentage"] = float((total_env_time / self.total_duration_sec) * 100)
+        stats["env_time_percentage"] = float(
+            (total_env_time / self.total_duration_sec) * 100
+        )
 
         return stats
 
@@ -137,7 +148,9 @@ class PerformanceProfiler:
             avg_time = total_time / count if count > 0 else 0
             pct = (total_time / total * 100) if total > 0 else 0
 
-            print(f"{name:40s} | 总: {total_time:7.3f}s | 平均: {avg_time:7.5f}s | 调用: {count:5d} | 占比: {pct:5.1f}%")
+            print(
+                f"{name:40s} | 总: {total_time:7.3f}s | 平均: {avg_time:7.5f}s | 调用: {count:5d} | 占比: {pct:5.1f}%"
+            )
 
         print("=" * 80)
         print(f"总时间: {total:.3f}s")
@@ -160,7 +173,9 @@ class PerformanceProfiler:
         total_cache_accesses = self.cache_stats["hits"] + self.cache_stats["misses"]
         if total_cache_accesses > 0:
             hit_rate = self.cache_stats["hits"] / total_cache_accesses * 100
-            print(f"ActionMask 缓存命中率: {hit_rate:.1f}% ({self.cache_stats['hits']}/{total_cache_accesses})")
+            print(
+                f"ActionMask 缓存命中率: {hit_rate:.1f}% ({self.cache_stats['hits']}/{total_cache_accesses})"
+            )
         else:
             print("ActionMask 缓存: 无数据")
 
@@ -201,7 +216,9 @@ def profile_single_episode():
     config = get_quick_test_config()
     device = "cpu"  # 使用CPU避免GPU开销干扰
     with profiler.profile("创建AgentPool"):
-        agent_pool = NFSPAgentPool(config=config, device=device, num_agents=4, share_parameters=True)
+        agent_pool = NFSPAgentPool(
+            config=config, device=device, num_agents=4, share_parameters=True
+        )
     random_opponent = RandomOpponent()
 
     # 运行几个episode
@@ -226,7 +243,9 @@ def profile_single_episode():
             action_mask = obs["action_mask"]
 
             with profiler.profile("选择动作"):
-                action_type, action_param = random_opponent.choose_action(obs, action_mask)
+                action_type, action_param = random_opponent.choose_action(
+                    obs, action_mask
+                )
 
             with profiler.profile("env.step"):
                 env.step((action_type, action_param))
@@ -244,9 +263,9 @@ def profile_single_episode():
     last_time = sum(profiler.timings["env.last"])
     step_time = sum(profiler.timings["env.step"])
     total = reset_time + last_time + step_time
-    print(f"env.reset:   {reset_time:8.3f}s ({reset_time/total*100:.1f}%)")
-    print(f"env.last:    {last_time:8.3f}s ({last_time/total*100:.1f}%)")
-    print(f"env.step:    {step_time:8.3f}s ({step_time/total*100:.1f}%)")
+    print(f"env.reset:   {reset_time:8.3f}s ({reset_time / total * 100:.1f}%)")
+    print(f"env.last:    {last_time:8.3f}s ({last_time / total * 100:.1f}%)")
+    print(f"env.step:    {step_time:8.3f}s ({step_time / total * 100:.1f}%)")
     print(f"总计:        {total:8.3f}s")
 
     return profiler
@@ -262,16 +281,20 @@ def profile_with_cprofile():
     profiler.enable()
 
     # 创建环境和agents
-    env = WuhanMahjongEnv(render_mode=None, training_phase=1, enable_logging=False, fast_mode=True)
+    env = WuhanMahjongEnv(
+        render_mode=None, training_phase=1, enable_logging=False, fast_mode=True
+    )
     config = get_quick_test_config()
-    agent_pool = NFSPAgentPool(config=config, device="cpu", num_agents=4, share_parameters=True)
+    agent_pool = NFSPAgentPool(
+        config=config, device="cpu", num_agents=4, share_parameters=True
+    )
     random_opponent = RandomOpponent()
 
     # 运行50个episode
     num_episodes = 50
     for ep in range(num_episodes):
         if ep % 5 == 0:  # 每 5 个 episode 提示进度
-            print(f"Progress: {ep+1}/{num_episodes} episodes...")
+            print(f"Progress: {ep + 1}/{num_episodes} episodes...")
 
         obs, _ = env.reset()
         for agent_name in env.agent_iter():
@@ -290,7 +313,7 @@ def profile_with_cprofile():
     print("=" * 80)
 
     s = io.StringIO()
-    ps = pstats.Stats(profiler, stream=s).sort_stats('cumulative')
+    ps = pstats.Stats(profiler, stream=s).sort_stats("cumulative")
     ps.print_stats(30)  # 打印前30个函数
 
     print(s.getvalue())
@@ -332,7 +355,7 @@ def profile_full_benchmark(num_episodes: int = 20):
     for ep in range(num_episodes):
         try:
             if ep % 5 == 0:
-                print(f"Progress: {ep+1}/{num_episodes} episodes...")
+                print(f"Progress: {ep + 1}/{num_episodes} episodes...")
 
             # 创建环境（每次 episode 隔离）
             env = WuhanMahjongEnv(
@@ -372,7 +395,9 @@ def profile_full_benchmark(num_episodes: int = 20):
                 action_mask = obs["action_mask"]
 
                 step_start = time.perf_counter()
-                action_type, action_param = random_opponent.choose_action(obs, action_mask)
+                action_type, action_param = random_opponent.choose_action(
+                    obs, action_mask
+                )
                 env.step((action_type, action_param))
                 step_total += time.perf_counter() - step_start
 
@@ -408,7 +433,7 @@ def profile_full_benchmark(num_episodes: int = 20):
                 count_kongs=kong_count,
                 count_pongs=pong_count,
                 count_chows=chow_count,
-                memory_peak_mb=peak_mb
+                memory_peak_mb=peak_mb,
             )
 
             results.episode_times.append(episode_duration)
@@ -424,7 +449,7 @@ def profile_full_benchmark(num_episodes: int = 20):
 
         except Exception as e:
             # 记录错误但继续
-            print(f"⚠️  Episode {ep+1} failed: {e}")
+            print(f"⚠️  Episode {ep + 1} failed: {e}")
 
             # 创建部分结果数据
             partial_result = EpisodeData(
@@ -434,8 +459,12 @@ def profile_full_benchmark(num_episodes: int = 20):
                 winner=-1,  # 无效值表示失败
                 memory_peak_mb=0.0,
                 # 默认值
-                time_reset=0.0, time_step_total=0.0, time_env_last=0.0,
-                count_kongs=0, count_pongs=0, count_chows=0
+                time_reset=0.0,
+                time_step_total=0.0,
+                time_env_last=0.0,
+                count_kongs=0,
+                count_pongs=0,
+                count_chows=0,
             )
             results.episode_times.append(0.0)
             results.episode_steps.append(0)
@@ -454,7 +483,9 @@ def profile_full_benchmark(num_episodes: int = 20):
     gc.enable()
     tracemalloc.stop()
 
-    print(f"\nBenchmark complete: {num_episodes} episodes in {results.total_duration_sec:.2f}s")
+    print(
+        f"\nBenchmark complete: {num_episodes} episodes in {results.total_duration_sec:.2f}s"
+    )
 
     # 计算并显示统计
     stats = results.compute_statistics()
@@ -475,7 +506,9 @@ def print_benchmark_report(stats: Dict[str, Any], results: BenchmarkResults) -> 
     # 基本信息
     print(f"\nEpisodes: {results.num_episodes}")
     print(f"Total time: {results.total_duration_sec:.2f}s")
-    print(f"Average per episode: {stats['avg_episode_duration']:.3f}s ± {stats['std_episode_duration']:.3f}s")
+    print(
+        f"Average per episode: {stats['avg_episode_duration']:.3f}s ± {stats['std_episode_duration']:.3f}s"
+    )
 
     # 性能指标
     print("\n### Throughput Metrics ###")
@@ -511,14 +544,14 @@ def save_results(results: BenchmarkResults, filepath: str) -> None:
     try:
         # 写入临时文件
         temp_path = filepath + ".tmp"
-        with open(temp_path, 'w', encoding='utf-8') as f:
+        with open(temp_path, "w", encoding="utf-8") as f:
             # 转换为带时间戳的字典
             data = asdict(results)
-            data['timestamp'] = datetime.now().isoformat()
+            data["timestamp"] = datetime.now().isoformat()
             json.dump(data, f, indent=2, ensure_ascii=False)
 
         # 验证可以读回
-        with open(temp_path, 'r', encoding='utf-8') as f:
+        with open(temp_path, "r", encoding="utf-8") as f:
             _ = json.load(f)
 
         # 原子替换
@@ -537,9 +570,13 @@ def profile_observation_building():
     print("\n### 观测构建性能分析 ###")
 
     import time
-    from src.mahjong_rl.observation.wuhan_7p4l_observation_builder import Wuhan7P4LObservationBuilder
+    from src.mahjong_rl.observation.wuhan_7p4l_observation_builder import (
+        Wuhan7P4LObservationBuilder,
+    )
 
-    env = WuhanMahjongEnv(render_mode=None, training_phase=1, enable_logging=False, fast_mode=True)
+    env = WuhanMahjongEnv(
+        render_mode=None, training_phase=1, enable_logging=False, fast_mode=True
+    )
     obs, _ = env.reset()
 
     profiler = PerformanceProfiler()
@@ -555,11 +592,15 @@ def profile_observation_building():
             obs_builder = env.unwrapped.state_machine.observation_builder
 
             with profiler.profile("构建全局观测 (首次)"):
-                global_obs = obs_builder.build_global_observation(context, training_phase=1)
+                global_obs = obs_builder.build_global_observation(
+                    context, training_phase=1
+                )
 
             with profiler.profile("构建全局观测 (后续)"):
                 for _ in range(10):
-                    global_obs = obs_builder.build_global_observation(context, training_phase=1)
+                    global_obs = obs_builder.build_global_observation(
+                        context, training_phase=1
+                    )
 
     profiler.report()
 
@@ -596,35 +637,46 @@ def profile_network_forward():
         "wall": torch.randn(batch_size, 82).to(device),
         # 副露 [batch, 16], [batch, 256], [batch, 32]
         "melds": {
-            "action_types": torch.randint(0, 11, (batch_size, 16)).to(device),  # 修复：包含 PASS action (value 10)
+            "action_types": torch.randint(0, 11, (batch_size, 16)).to(
+                device
+            ),  # 修复：包含 PASS action (value 10)
             "tiles": torch.randint(0, 2, (batch_size, 256)).float().to(device),
             "group_indices": torch.randint(0, 4, (batch_size, 32)).to(device),
         },
         # 动作历史 [batch, 80] each
         "action_history": {
-            "types": torch.randint(0, 11, (batch_size, 80)).to(device),  # 修复：匹配 ActionType 范围 0-10
+            "types": torch.randint(0, 11, (batch_size, 80)).to(
+                device
+            ),  # 修复：匹配 ActionType 范围 0-10
             "params": torch.randint(0, 35, (batch_size, 80)).to(device),
             "players": torch.randint(0, 4, (batch_size, 80)).to(device),
         },
         # 特殊杠 [batch, 12] (4 players × 3 types: pi_gang[0-7], lai_gang[0-3], zhong_gang[0-4])
-        "special_gangs": torch.cat([
-            torch.randint(0, 8, (batch_size, 1), device=device),   # p0: pi_gang 0-7
-            torch.randint(0, 4, (batch_size, 1), device=device),   # p0: lai_gang 0-3
-            torch.randint(0, 5, (batch_size, 1), device=device),   # p0: zhong_gang 0-4
-            torch.randint(0, 8, (batch_size, 1), device=device),   # p1: pi_gang
-            torch.randint(0, 4, (batch_size, 1), device=device),   # p1: lai_gang
-            torch.randint(0, 5, (batch_size, 1), device=device),   # p1: zhong_gang
-            torch.randint(0, 8, (batch_size, 1), device=device),   # p2: pi_gang
-            torch.randint(0, 4, (batch_size, 1), device=device),   # p2: lai_gang
-            torch.randint(0, 5, (batch_size, 1), device=device),   # p2: zhong_gang
-            torch.randint(0, 8, (batch_size, 1), device=device),   # p3: pi_gang
-            torch.randint(0, 4, (batch_size, 1), device=device),   # p3: lai_gang
-            torch.randint(0, 5, (batch_size, 1), device=device),   # p3: zhong_gang
-        ], dim=1).to(device),
+        "special_gangs": torch.cat(
+            [
+                torch.randint(0, 8, (batch_size, 1), device=device),  # p0: pi_gang 0-7
+                torch.randint(0, 4, (batch_size, 1), device=device),  # p0: lai_gang 0-3
+                torch.randint(
+                    0, 5, (batch_size, 1), device=device
+                ),  # p0: zhong_gang 0-4
+                torch.randint(0, 8, (batch_size, 1), device=device),  # p1: pi_gang
+                torch.randint(0, 4, (batch_size, 1), device=device),  # p1: lai_gang
+                torch.randint(0, 5, (batch_size, 1), device=device),  # p1: zhong_gang
+                torch.randint(0, 8, (batch_size, 1), device=device),  # p2: pi_gang
+                torch.randint(0, 4, (batch_size, 1), device=device),  # p2: lai_gang
+                torch.randint(0, 5, (batch_size, 1), device=device),  # p2: zhong_gang
+                torch.randint(0, 8, (batch_size, 1), device=device),  # p3: pi_gang
+                torch.randint(0, 4, (batch_size, 1), device=device),  # p3: lai_gang
+                torch.randint(0, 5, (batch_size, 1), device=device),  # p3: zhong_gang
+            ],
+            dim=1,
+        ).to(device),
         # 当前玩家 [batch, 1]
         "current_player": torch.randint(0, 4, (batch_size, 1)).float().to(device),
         # 番数 [batch, 4]
-        "fan_counts": torch.randint(0, 600, (batch_size, 4)).to(device),  # 修复：匹配实际最大值 599
+        "fan_counts": torch.randint(0, 600, (batch_size, 4)).to(
+            device
+        ),  # 修复：匹配实际最大值 599
         # 特殊指示器 [batch, 2]
         "special_indicators": torch.randint(0, 34, (batch_size, 2)).to(device),
         # 剩余牌数 [batch, 1]
@@ -632,7 +684,9 @@ def profile_network_forward():
         # 庄家 [batch, 1]
         "dealer": torch.randint(0, 4, (batch_size, 1)).float().to(device),
         # 当前阶段 [batch, 1]
-        "current_phase": torch.randint(0, 14, (batch_size, 1)).float().to(device),  # 修复：匹配 14 个游戏状态 (0-13)
+        "current_phase": torch.randint(0, 14, (batch_size, 1))
+        .float()
+        .to(device),  # 修复：匹配 14 个游戏状态 (0-13)
     }
     action_mask = torch.ones(batch_size, 145).to(device)
 

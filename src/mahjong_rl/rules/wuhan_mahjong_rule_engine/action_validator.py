@@ -20,6 +20,18 @@ class ActionValidator:
         self.red = game_context.red_dragon
         self.special_tiles = self.pizi + [self.red, self.laizi]
 
+    def update_context(self) -> None:
+        """
+        更新从 context 缓存的特殊牌信息
+
+        应该在特殊牌生成后（InitialState 完成后）调用，
+        确保 laizi, pizi, red 等属性是最新的。
+        """
+        self.laizi = self.context.lazy_tile
+        self.pizi = self.context.skin_tile
+        self.red = self.context.red_dragon
+        self.special_tiles = self.pizi + [self.red, self.laizi]
+
 
     # --------------------------- 对外核心接口 ---------------------------
     def detect_available_actions_after_discard(self, current_player: PlayerData, discard_tile: int, discard_player_idx: int) -> List[MahjongAction]:

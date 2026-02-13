@@ -435,6 +435,12 @@ class WuhanMahjongEnv(AECEnv):
         )
         observation_builder.set_cached_validator(self._cached_validator)
 
+        # 注入缓存的组件到状态机和观测构建器
+        self.state_machine.set_cached_components(
+            validator=self._cached_validator, win_checker=self._cached_win_checker
+        )
+        observation_builder.set_cached_validator(self._cached_validator)
+
         # 记录游戏开始
         if self.logger:
             self.logger.start_game(
@@ -1095,7 +1101,7 @@ class WuhanMahjongEnv(AECEnv):
         if fast_mode and not enable_logging:
             # 最优训练配置，打印信息但不警告（仅第一次）
             if not hasattr(WuhanMahjongEnv, '_config_printed'):
-                print(f"✅ 性能配置：fast_mode=True, enable_logging=False （最优训练性能）")
+                print(f"[OK] 性能配置：fast_mode=True, enable_logging=False (最优训练性能)")
                 WuhanMahjongEnv._config_printed = True
         elif fast_mode and enable_logging:
             warnings.warn(
@@ -1105,7 +1111,7 @@ class WuhanMahjongEnv(AECEnv):
             )
         elif not fast_mode and enable_logging:
             if not hasattr(WuhanMahjongEnv, '_debug_config_printed'):
-                print(f"⚠️  配置：fast_mode=False, enable_logging=True （完整功能调试模式）")
+                print(f"[!] 配置：fast_mode=False, enable_logging=True (完整功能调试模式)")
                 WuhanMahjongEnv._debug_config_printed = True
 
         # 4. 性能监控配置建议
