@@ -278,8 +278,21 @@ def profile_network_forward():
             "params": torch.randint(0, 35, (batch_size, 80)).to(device),
             "players": torch.randint(0, 4, (batch_size, 80)).to(device),
         },
-        # 特殊杠 [batch, 12] (4 players * 3 types)
-        "special_gangs": torch.randint(0, 8, (batch_size, 12)).to(device),
+        # 特殊杠 [batch, 12] (4 players × 3 types: pi_gang[0-7], lai_gang[0-3], zhong_gang[0-4])
+        "special_gangs": torch.cat([
+            torch.randint(0, 8, (batch_size, 1), device=device),   # p0: pi_gang 0-7
+            torch.randint(0, 4, (batch_size, 1), device=device),   # p0: lai_gang 0-3
+            torch.randint(0, 5, (batch_size, 1), device=device),   # p0: zhong_gang 0-4
+            torch.randint(0, 8, (batch_size, 1), device=device),   # p1: pi_gang
+            torch.randint(0, 4, (batch_size, 1), device=device),   # p1: lai_gang
+            torch.randint(0, 5, (batch_size, 1), device=device),   # p1: zhong_gang
+            torch.randint(0, 8, (batch_size, 1), device=device),   # p2: pi_gang
+            torch.randint(0, 4, (batch_size, 1), device=device),   # p2: lai_gang
+            torch.randint(0, 5, (batch_size, 1), device=device),   # p2: zhong_gang
+            torch.randint(0, 8, (batch_size, 1), device=device),   # p3: pi_gang
+            torch.randint(0, 4, (batch_size, 1), device=device),   # p3: lai_gang
+            torch.randint(0, 5, (batch_size, 1), device=device),   # p3: zhong_gang
+        ], dim=1).to(device),
         # 当前玩家 [batch, 1]
         "current_player": torch.randint(0, 4, (batch_size, 1)).float().to(device),
         # 番数 [batch, 4]
