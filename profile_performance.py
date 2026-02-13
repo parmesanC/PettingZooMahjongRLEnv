@@ -286,6 +286,147 @@ def profile_with_cprofile():
     print(s.getvalue())
 
 
+def profile_full_benchmark(num_episodes: int = 20):
+    """运行完整基准测试 - 20 个 episode 的全面性能分析
+
+    收集指标：
+    - Episode 级别：步数、时长、胜者信息
+    - 环境操作：reset, last, step 的计时统计
+    - 网络性能：前向传播时间（如果使用 RL agent）
+    - 系统资源：内存峰值、垃圾回收次数
+    - 吞吐量：FPS（每秒步数）、episode 平均时长
+
+    输出：
+    - 控制台：格式化性能报告
+    - 文件：JSON 格式详细数据 (benchmark_results_YYYYMMDD_HHMMSS.json)
+    """
+    print("\n### Full Performance Benchmark ###")
+    print(f"Running {num_episodes} episodes for comprehensive analysis...")
+    print("This will take a few minutes...\n")
+
+    import tracemalloc
+    import gc
+
+    # 启动内存追踪
+    tracemalloc.start()
+    gc.disable()
+
+    # 初始化
+    results = BenchmarkResults(num_episodes=num_episodes, total_duration_sec=0.0)
+
+    start_time = time.perf_counter()
+
+    # 运行 episodes
+    for ep in range(num_episodes):
+        if ep % 5 == 0:
+            print(f"Progress: {ep+1}/{num_episodes} episodes...")
+
+        # 创建环境（每次 episode 隔离）
+        env = WuhanMahjongEnv(
+            render_mode=None,
+            training_phase=1,
+            enable_logging=False,
+        )
+        config = get_quick_test_config()
+        random_opponent = RandomOpponent()
+
+        # Reset 并跟踪计时
+        reset_start = time.perf_counter()
+        obs, _ = env.reset()
+        reset_time = time.perf_counter() - reset_start
+
+        # 跟踪 episode
+        episode_start = time.perf_counter()
+        episode_steps = 0
+        last_calls = 0
+        step_total = 0.0
+        kong_count = 0
+        pong_count = 0
+        chow_count = 0
+
+        # Episode 循环
+        for agent_name in env.agent_iter():
+            episode_steps += 1
+
+            last_start = time.perf_counter()
+            obs, reward, terminated, truncated, info = env.last()
+            last_time = time.perf_counter() - last_start
+            last_calls += 1
+            step_total += last_time
+
+            agent_idx = int(agent_name.split("_")[1])
+            action_mask = obs["action_mask"]
+
+            step_start = time.perf_counter()
+            action_type, action_param = random_opponent.choose_action(obs, action_mask)
+            env.step((action_type, action_param))
+            step_total += time.perf_counter() - step_start
+
+            # 计数操作
+            if action_type == 3 or action_type > 4:  # KONG actions
+                kong_count += 1
+            elif action_type == 2:  # PONG
+                pong_count += 1
+            elif action_type == 1:  # CHOW
+                chow_count += 1
+
+            if terminated or truncated:
+                break
+
+        episode_duration = time.perf_counter() - episode_start
+
+        # 获取内存峰值
+        current_mem, peak_mem = tracemalloc.get_traced_memory()
+        peak_mb = peak_mem / 1024 / 1024
+
+        # 确定胜者（检查 info 或最后玩家）
+        winner = info.get("winner", -1)
+
+        # 存储 episode 数据
+        episode_data = EpisodeData(
+            episode_id=ep + 1,
+            steps=episode_steps,
+            duration_sec=episode_duration,
+            winner=winner,
+            time_reset=reset_time,
+            time_step_total=step_total,
+            time_env_last=last_time * last_calls,
+            count_kongs=kong_count,
+            count_pongs=pong_count,
+            count_chows=chow_count,
+            memory_peak_mb=peak_mb
+        )
+
+        results.episode_times.append(episode_duration)
+        results.episode_steps.append(episode_steps)
+        results.winners.append(winner)
+        results.env_reset_times.append(reset_time)
+        results.env_step_times.append(step_total)
+        results.env_last_times.append(last_time * last_calls)
+        results.memory_peaks.append(peak_mb)
+
+        # 清理环境
+        del env
+
+    # 总时间
+    results.total_duration_sec = time.perf_counter() - start_time
+
+    # 停止内存追踪
+    gc.enable()
+    tracemalloc.stop()
+
+    print(f"\nBenchmark complete: {num_episodes} episodes in {results.total_duration_sec:.2f}s")
+
+    # 计算并显示统计
+    stats = results.compute_statistics()
+    print_benchmark_report(stats, results)
+
+    # 保存结果
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filepath = f"benchmark_results_{timestamp}.json"
+    save_results(results, filepath)
+
+
 def profile_observation_building():
     """分析观测构建性能"""
     print("\n### 观测构建性能分析 ###")
