@@ -296,7 +296,7 @@ def profile_network_forward():
         # 当前玩家 [batch, 1]
         "current_player": torch.randint(0, 4, (batch_size, 1)).float().to(device),
         # 番数 [batch, 4]
-        "fan_counts": torch.randint(0, 100, (batch_size, 4)).to(device),
+        "fan_counts": torch.randint(0, 600, (batch_size, 4)).to(device),  # 修复：匹配实际最大值 599
         # 特殊指示器 [batch, 2]
         "special_indicators": torch.randint(0, 34, (batch_size, 2)).to(device),
         # 剩余牌数 [batch, 1]
