@@ -20,6 +20,84 @@ from example_mahjong_env import WuhanMahjongEnv
 from src.drl.config import get_quick_test_config
 from src.drl.agent import NFSPAgentPool, RandomOpponent
 
+# 新增：数据类和JSON导出支持
+from dataclasses import dataclass, field, asdict
+from typing import List, Dict, Any
+import json
+from datetime import datetime
+from pathlib import Path
+
+
+@dataclass
+class EpisodeData:
+    """单个 episode 的性能数据"""
+    episode_id: int
+    steps: int
+    duration_sec: float
+    winner: int  # 赢家玩家 ID
+
+    # 详细计时（秒）- 无默认值
+    time_reset: float
+    time_step_total: float  # 累计
+    time_env_last: float  # 累计
+
+    # 操作计数 - 无默认值
+    count_kongs: int
+    count_pongs: int
+    count_chows: int
+
+    # 内存峰值 - 无默认值
+    memory_peak_mb: float
+
+
+@dataclass
+class BenchmarkResults:
+    """完整基准测试结果"""
+    num_episodes: int
+    total_duration_sec: float
+
+    # Episode 级别统计
+    episode_times: List[float] = field(default_factory=list)
+    episode_steps: List[int] = field(default_factory=list)
+    winners: List[int] = field(default_factory=list)
+
+    # 环境操作统计
+    env_reset_times: List[float] = field(default_factory=list)
+    env_step_times: List[float] = field(default_factory=list)
+    env_last_times: List[float] = field(default_factory=list)
+
+    # 系统资源统计
+    memory_peaks: List[float] = field(default_factory=list)
+
+    def compute_statistics(self) -> Dict[str, Any]:
+        """计算汇总统计：均值、标准差、最小/最大"""
+        stats = {
+            # Episode 时长
+            "avg_episode_duration": float(np.mean(self.episode_times)),
+            "std_episode_duration": float(np.std(self.episode_times)),
+            "min_episode_duration": float(np.min(self.episode_times)),
+            "max_episode_duration": float(np.max(self.episode_times)),
+
+            # 吞吐量
+            "total_steps": int(np.sum(self.episode_steps)),
+            "avg_steps_per_sec": float(np.sum(self.episode_steps) / self.total_duration_sec),
+            "avg_fps": float(self.num_episodes / self.total_duration_sec),
+
+            # 内存 - 使用 memory_peaks（复数）
+            "avg_memory_mb": float(np.mean(self.memory_peaks)),
+            "peak_memory_mb": float(np.max(self.memory_peaks)),
+        }
+
+        # 环境操作占比
+        total_env_time = (
+            np.sum(self.env_reset_times) +
+            np.sum(self.env_step_times) +
+            np.sum(self.env_last_times)
+        )
+        stats["env_time_percentage"] = float((total_env_time / self.total_duration_sec) * 100)
+
+        return stats
+
 
 class PerformanceProfiler:
     """性能分析器"""
